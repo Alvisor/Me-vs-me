@@ -1,0 +1,12 @@
+{
+  "name": "Me vs Me",
+  "short_name": "Me vs Me",
+  "description": "Rutina full body de 2–3 días con progresión automática.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

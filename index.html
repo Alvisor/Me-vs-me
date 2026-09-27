@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Me vs Me</title>
+  <meta name="description" content="Rutina full body de 2–3 días con progresión automática. Compite contra tu yo de la semana pasada.">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top"><span class="logo">ME <b>vs</b> ME</span></header>
+  <main id="main"></main>
+  <div id="timer" hidden></div>
+  <nav>
+    <button data-view="train"><span>🏋️</span>Entrenar</button>
+    <button data-view="library"><span>📖</span>Ejercicios</button>
+    <button data-view="progress"><span>📈</span>Progreso</button>
+    <button data-view="settings"><span>⚙️</span>Ajustes</button>
+  </nav>
+  <div id="modal" hidden><div id="modalBody"></div></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
