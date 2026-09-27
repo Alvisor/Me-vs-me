@@ -14,7 +14,7 @@ function hydrate(data) {
   return {
     ...d,
     ...data,
-    settings: { ...d.settings, ...s, profile: { ...d.settings.profile, ...s.profile } },
+    settings: { ...d.settings, ...s, profile: { ...d.settings.profile, ...s.profile, injuredSide: s.profile?.injuredSide ?? d.settings.profile.injuredSide } },
   };
 }
 function load() {

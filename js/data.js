@@ -454,13 +454,13 @@ export const ROUTINES = {
 
 // Lo que la app "recuerda" de ti. Editable en Ajustes → Tu perfil.
 export const DEFAULT_PROFILE = {
-  injuredSide: null, // 'L' | 'R'
+  injuredSide: 'L', // pierna lesionada: izquierda
   bodyweight: null, // kg, para calcular la carga real en ejercicios asistidos
   recovery: true,
   notes: [
     'Entreno 2 (máximo 3) días por semana.',
-    'Hace ~3 meses: fractura incompleta de tibia y algo de astillamiento en el fémur. Controlar pesos en piernas.',
-    'Hago los ejercicios de pierna de un lado y luego del otro, empezando por la lesionada.',
+    'Hace ~3 meses: fractura incompleta de tibia izquierda y algo de astillamiento en el fémur. Controlar pesos en piernas.',
+    'Hago los ejercicios de pierna de un lado y luego del otro, empezando por la lesionada (izquierda).',
     'Glúteos ya muy desarrollados (montaña + muchas sentadillas en el colegio): no priorizar glúteo; hip thrust opcional.',
     'Prioridades: isquios (curl femoral sentado 2×/semana), hombro lateral y espalda.',
     'Máquinas: Hammer Strength incline press y prensa, hack squat, pectoral fly/rear delt, elevación lateral, extensión de tríceps y curl de bíceps (Life Fitness), remo, dominadas y fondos asistidos, curl femoral sentado, extensión de gemelos, predicador.',
