@@ -1,15 +1,25 @@
-import { EXERCISES, ROUTINES, MUSCLES, WEEKLY_TARGET, imgUrl } from './data.js';
+import { EXERCISES, ROUTINES, MUSCLES, WEEKLY_TARGET, DEFAULT_PROFILE, PAIN_LIMIT, imgUrl } from './data.js';
 import {
-  suggest, lastEntry, newWorkout, nextRoutineKey, weeklySets, sessionsThisWeek, compare, bestE1rm,
+  suggestFor, lastEntry, newWorkout, nextRoutineKey, weeklySets, sessionsThisWeek, compare, bestE1rm,
+  asymmetry, slotExercise, formatSets, SIDE_LABEL,
 } from './logic.js';
 
 // ---------- Estado persistente ----------
 const KEY = 'mevsme.v1';
-const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {} }, workouts: [], current: null });
+const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, profile: { ...DEFAULT_PROFILE } }, workouts: [], current: null });
 
+function hydrate(data) {
+  const d = defaults();
+  const s = data?.settings || {};
+  return {
+    ...d,
+    ...data,
+    settings: { ...d.settings, ...s, profile: { ...d.settings.profile, ...s.profile } },
+  };
+}
 function load() {
   try {
-    return { ...defaults(), ...JSON.parse(localStorage.getItem(KEY)) };
+    return hydrate(JSON.parse(localStorage.getItem(KEY)));
   } catch {
     return defaults();
   }
@@ -18,13 +28,15 @@ let state = load();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* almacenamiento no disponible */ }
 }
+const profile = () => state.settings.profile;
 
 // ---------- Utilidades ----------
 const $ = (sel, root = document) => root.querySelector(sel);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' });
-const setsText = (sets) => sets.filter((s) => s.done).map((s) => `${s.weight || 0}×${s.reps}`).join(', ');
+const setsText = formatSets;
 const slotOf = (w, slotId) => ROUTINES[w.routine].slots.find((s) => s.id === slotId);
+const sideName = (side) => (side === 'L' ? 'izquierda' : 'derecha');
 
 let view = 'train';
 const main = $('#main');
@@ -41,19 +53,25 @@ function renderTrain() {
   const r = ROUTINES[key];
   const done = sessionsThisWeek(state.workouts);
   const goal = state.settings.daysPerWeek;
+  const p = profile();
   main.innerHTML = `
     <section class="card hero">
       <p class="muted">Esta semana</p>
       <p class="big">${done} / ${goal} <span class="muted">entrenos</span></p>
       <div class="bar"><span style="width:${Math.min(100, (done / goal) * 100)}%"></span></div>
     </section>
+    ${p.recovery && !p.injuredSide ? `<section class="card notice">Dime qué pierna fue la lesionada en <a href="#" data-go="settings">Ajustes → Tu perfil</a> para que la app la ponga siempre primero.</section>` : ''}
     <section class="card">
       <p class="muted">Próximo entreno</p>
       <h2>${r.name}</h2>
       <ul class="plan">
         ${r.slots.map((s) => {
-          const id = state.settings.swaps[s.id] || s.exercise;
-          return `<li><img src="${imgUrl(id)}" alt="" loading="lazy"><span>${esc(EXERCISES[id].name)}</span><span class="muted">${s.sets}×${s.reps[0]}–${s.reps[1]}</span></li>`;
+          const id = slotExercise(s, state.settings.swaps);
+          const ex = EXERCISES[id];
+          const sug = suggestFor(state.workouts, id, s.reps, p);
+          return `<li><img src="${imgUrl(id)}" alt="" loading="lazy">
+            <span>${esc(ex.name)}${ex.unilateral ? ' <small class="pill">1 pierna</small>' : ''}</span>
+            <span class="muted">${sug.weight != null ? `${sug.weight} kg` : `${s.sets}×${s.reps[0]}–${s.reps[1]}`}</span></li>`;
         }).join('')}
       </ul>
       <button class="primary" id="start">Empezar ${r.name}</button>
@@ -61,16 +79,24 @@ function renderTrain() {
     </section>`;
   $('#start').onclick = () => start(key);
   $('#startOther').onclick = () => start(key === 'A' ? 'B' : 'A');
+  bindGo();
+}
+
+function bindGo() {
+  main.querySelectorAll('[data-go]').forEach((a) => {
+    a.onclick = (ev) => { ev.preventDefault(); view = a.dataset.go; render(); };
+  });
 }
 
 function start(key) {
-  state.current = newWorkout(key, state.workouts, state.settings.swaps);
+  state.current = newWorkout(key, state.workouts, state.settings.swaps, profile());
   save();
   render();
 }
 
 function renderWorkout() {
   const w = state.current;
+  const p = profile();
   let lastSuperset = null;
   main.innerHTML = `
     <h2>${ROUTINES[w.routine].name}</h2>
@@ -78,7 +104,8 @@ function renderWorkout() {
       const slot = slotOf(w, e.slot);
       const ex = EXERCISES[e.exercise];
       const prev = lastEntry(state.workouts, e.exercise);
-      const sug = suggest(prev?.sets, slot.reps, ex.increment);
+      const sug = suggestFor(state.workouts, e.exercise, slot.reps, p);
+      const asym = prev && ex.unilateral ? asymmetry(prev.sets) : null;
       const ssLabel = slot.superset && slot.superset !== lastSuperset ? '<p class="tag">Superserie ↓ alterna estos dos</p>' : '';
       lastSuperset = slot.superset || null;
       return `${ssLabel}
@@ -87,21 +114,39 @@ function renderWorkout() {
           <img src="${imgUrl(e.exercise)}" alt="" data-info="${e.exercise}" class="thumb">
           <div>
             <h3 data-info="${e.exercise}">${esc(ex.name)}</h3>
-            <p class="muted">${slot.sets} series · ${slot.reps[0]}–${slot.reps[1]} reps · descanso ${Math.round(slot.rest / 60 * 10) / 10} min</p>
+            <p class="muted">${slot.sets} series${ex.unilateral ? ' por pierna' : ''} · ${slot.reps[0]}–${slot.reps[1]} reps · descanso ${Math.round(slot.rest / 60 * 10) / 10} min</p>
           </div>
         </header>
-        <p class="hint">${prev ? `Última vez: <b>${setsText(prev.sets)}</b><br>` : ''}🎯 ${esc(sug.text)}</p>
+        <div class="hint">
+          ${prev ? `Última vez: <b>${setsText(prev.sets)}</b>${prev.pain != null ? ` · dolor ${prev.pain}/10` : ''}<br>` : ''}
+          🎯 ${esc(sug.text)}
+          ${ex.unilateral ? `<br>🦵 Empieza por la ${p.injuredSide ? `${sideName(p.injuredSide)} (lesionada)` : 'pierna lesionada'}; la otra hace el mismo peso y reps, no más.` : ''}
+          ${ex.assisted ? '<br>⚖️ El peso es la <b>asistencia</b>: cuanto menos, mejor.' : ''}
+          ${asym && asym.pct >= 10 ? `<br><span class="warnText">⚠️ La última vez hubo un ${asym.pct}% de diferencia entre piernas${asym.weaker ? ` (más débil: ${sideName(asym.weaker)})` : ''}.</span>` : ''}
+        </div>
         <div class="sets">
-          <div class="row head"><span>#</span><span>kg</span><span>reps</span><span></span></div>
-          ${e.sets.map((s, si) => `
-            <div class="row ${s.done ? 'done' : ''}">
-              <span>${si + 1}</span>
-              <input type="number" inputmode="decimal" step="0.5" min="0" value="${esc(s.weight)}" data-e="${ei}" data-s="${si}" data-f="weight" placeholder="${sug.weight ?? ''}">
-              <input type="number" inputmode="numeric" min="0" value="${esc(s.reps)}" data-e="${ei}" data-s="${si}" data-f="reps" placeholder="${sug.reps}">
+          <div class="row head"><span>#</span><span>${ex.assisted ? 'ayuda kg' : 'kg'}</span><span>reps</span><span></span></div>
+          ${e.sets.map((s, si) => {
+            // En unilaterales, el segundo lado propone lo que hizo el primero.
+            const pair = ex.unilateral && si % 2 === 1 ? e.sets[si - 1] : null;
+            const phW = pair && pair.weight !== '' ? pair.weight : sug.weight ?? '';
+            const phR = pair && pair.reps !== '' ? pair.reps : sug.reps;
+            const n = ex.unilateral ? `${Math.floor(si / 2) + 1}<small>${SIDE_LABEL[s.side]}</small>` : si + 1;
+            return `
+            <div class="row ${s.done ? 'done' : ''} ${pair ? 'pair' : ''}">
+              <span class="n">${n}</span>
+              <input type="number" inputmode="decimal" step="0.5" min="0" value="${esc(s.weight)}" data-e="${ei}" data-s="${si}" data-f="weight" placeholder="${phW}">
+              <input type="number" inputmode="numeric" min="0" value="${esc(s.reps)}" data-e="${ei}" data-s="${si}" data-f="reps" placeholder="${phR}">
               <button class="check" data-e="${ei}" data-s="${si}" aria-label="Completar serie">${s.done ? '✓' : '○'}</button>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
         <button class="link" data-add="${ei}">+ serie</button>
+        ${'pain' in e ? `
+        <div class="pain">
+          <span>Dolor en la pierna (0–10)</span>
+          <div class="painScale">${Array.from({ length: 11 }, (_, i) => `<button data-pain="${ei}" data-v="${i}" class="${e.pain === i ? 'active' : ''} ${i > PAIN_LIMIT ? 'hi' : ''}">${i}</button>`).join('')}</div>
+        </div>` : ''}
       </section>`;
     }).join('')}
     <button class="primary" id="finish">Terminar entreno</button>
@@ -117,45 +162,61 @@ function renderWorkout() {
   main.querySelectorAll('.check').forEach((btn) => {
     btn.onclick = () => {
       const e = w.entries[btn.dataset.e];
-      const s = e.sets[btn.dataset.s];
+      const si = Number(btn.dataset.s);
+      const s = e.sets[si];
       const row = btn.closest('.row');
       // Si el campo está vacío usa la sugerencia (placeholder).
       for (const f of ['weight', 'reps']) {
         const inp = row.querySelector(`[data-f="${f}"]`);
-        if (s[f] === '' && inp.placeholder) s[f] = Number(inp.placeholder);
+        if (s[f] === '' && inp.placeholder !== '') s[f] = Number(inp.placeholder);
       }
       s.done = !s.done;
       save();
+      const ex = EXERCISES[e.exercise];
       const slot = slotOf(w, e.slot);
       const nextSlot = ROUTINES[w.routine].slots[Number(btn.dataset.e) + 1];
       const inSuperset = slot.superset && nextSlot?.superset === slot.superset;
-      if (s.done) startTimer(inSuperset ? 20 : slot.rest);
+      // En unilaterales se descansa tras hacer las dos piernas.
+      const firstSide = ex.unilateral && si % 2 === 0;
+      if (s.done && !firstSide) startTimer(inSuperset ? 20 : slot.rest);
       renderWorkout();
     };
   });
   main.querySelectorAll('[data-add]').forEach((btn) => {
     btn.onclick = () => {
-      const sets = w.entries[btn.dataset.add].sets;
-      sets.push({ weight: sets[sets.length - 1]?.weight ?? '', reps: '', done: false });
+      const e = w.entries[btn.dataset.add];
+      const ex = EXERCISES[e.exercise];
+      const last = e.sets[e.sets.length - 1];
+      const sides = ex.unilateral ? [e.sets[e.sets.length - 2]?.side, last?.side] : [undefined];
+      sides.forEach((side) => e.sets.push({ ...(side ? { side } : {}), weight: last?.weight ?? '', reps: '', done: false }));
+      save();
+      renderWorkout();
+    };
+  });
+  main.querySelectorAll('[data-pain]').forEach((btn) => {
+    btn.onclick = () => {
+      w.entries[btn.dataset.pain].pain = Number(btn.dataset.v);
       save();
       renderWorkout();
     };
   });
   main.querySelectorAll('[data-info]').forEach((el) => { el.onclick = () => openExercise(el.dataset.info); });
   $('#finish').onclick = finish;
-  $('#discard').onclick = () => {
-    if (!confirm('¿Descartar este entreno?')) return;
+  $('#discard').onclick = async () => {
+    if (!await ask('¿Descartar este entreno?', 'Descartar')) return;
     state.current = null;
     save();
     render();
   };
 }
 
-function finish() {
+async function finish() {
   const w = state.current;
   const doneSets = w.entries.flatMap((e) => e.sets).filter((s) => s.done).length;
-  if (!doneSets && !confirm('No has completado ninguna serie. ¿Terminar igualmente?')) return;
-  const results = compare(w, state.workouts);
+  if (!doneSets && !await ask('No has completado ninguna serie. ¿Terminar igualmente?', 'Terminar')) return;
+  const missingPain = w.entries.filter((e) => 'pain' in e && e.pain == null && e.sets.some((s) => s.done));
+  if (missingPain.length && !await ask('No has marcado el dolor en algún ejercicio de pierna. Sirve para frenar la progresión si molesta. ¿Terminar igualmente?', 'Terminar sin marcar')) return;
+  const results = compare(w, state.workouts, profile().bodyweight);
   w.entries.forEach((e) => { e.sets = e.sets.filter((s) => s.done); });
   w.entries = w.entries.filter((e) => e.sets.length);
   if (w.entries.length) state.workouts.push(w);
@@ -164,6 +225,10 @@ function finish() {
   stopTimer();
   const wins = results.filter((r) => r.diff > 0).length;
   const compared = results.filter((r) => r.before != null).length;
+  const asyms = w.entries
+    .filter((e) => EXERCISES[e.exercise].unilateral)
+    .map((e) => ({ e, a: asymmetry(e.sets) }))
+    .filter((x) => x.a && x.a.pct >= 10);
   openModal(`
     <h2>Me vs Me</h2>
     ${compared
@@ -177,6 +242,7 @@ function finish() {
           ${r.diff == null ? 'primera vez' : r.diff > 0 ? `▲ +${r.diff} kg` : r.diff < 0 ? `▼ ${r.diff} kg` : '= igual'}
         </span></li>`).join('')}
     </ul>
+    ${asyms.length ? `<p class="warnText">⚠️ Diferencia entre piernas: ${asyms.map((x) => `${esc(EXERCISES[x.e.exercise].name)} ${x.a.pct}%`).join(', ')}. Iguala la sana a la lesionada.</p>` : ''}
     <button class="primary" data-close>Listo</button>`);
   render();
 }
@@ -208,21 +274,27 @@ function stopTimer() {
 }
 
 // ---------- Biblioteca de ejercicios ----------
+function tiles(ids) {
+  return `<div class="grid">${ids.map((id) => `
+    <button class="tile" data-info="${id}">
+      <img src="${imgUrl(id)}" alt="" loading="lazy">
+      <span>${esc(EXERCISES[id].name)}</span>
+    </button>`).join('')}</div>`;
+}
+
 function renderLibrary() {
+  const ids = Object.keys(EXERCISES);
+  const gym = ids.filter((id) => EXERCISES[id].gym);
   const byMuscle = {};
-  for (const [id, ex] of Object.entries(EXERCISES)) (byMuscle[ex.primary[0]] ||= []).push(id);
+  for (const id of ids.filter((x) => !EXERCISES[x].gym)) (byMuscle[EXERCISES[id].primary[0]] ||= []).push(id);
   main.innerHTML = `
     <h2>Ejercicios</h2>
     <p class="muted">Toca un ejercicio para ver la técnica.</p>
+    <h3 class="group">En tu gimnasio</h3>
+    ${tiles(gym)}
+    <h3 class="group">Otras opciones</h3>
     ${Object.entries(MUSCLES).filter(([m]) => byMuscle[m]).map(([m, label]) => `
-      <h3 class="group">${label}</h3>
-      <div class="grid">
-        ${byMuscle[m].map((id) => `
-          <button class="tile" data-info="${id}">
-            <img src="${imgUrl(id)}" alt="" loading="lazy">
-            <span>${esc(EXERCISES[id].name)}</span>
-          </button>`).join('')}
-      </div>`).join('')}`;
+      <h4 class="sub">${label}</h4>${tiles(byMuscle[m])}`).join('')}`;
   main.querySelectorAll('[data-info]').forEach((el) => { el.onclick = () => openExercise(el.dataset.info); });
 }
 
@@ -231,11 +303,16 @@ function openExercise(id) {
   const history = state.workouts
     .map((w) => ({ date: w.date, e: w.entries.find((x) => x.exercise === id) }))
     .filter((h) => h.e)
-    .slice(-5)
+    .slice(-6)
     .reverse();
-  // Slots donde este ejercicio (o su original) puede ir, para permitir sustituir.
+  // Slots donde este ejercicio puede sustituir al original.
   const slots = Object.values(ROUTINES).flatMap((r) => r.slots.map((s) => ({ ...s, routine: r.name })))
     .filter((s) => s.exercise !== id && EXERCISES[s.exercise].alternatives.includes(id));
+  const flags = [
+    ex.unilateral && '🦵 Una pierna cada vez',
+    ex.assisted && '⚖️ Peso = asistencia',
+    ex.leg && profile().recovery && '🩹 Modo recuperación',
+  ].filter(Boolean);
   openModal(`
     <div class="anim" aria-label="Posición inicial y final">
       <img src="${imgUrl(id, 0)}" alt="${esc(ex.name)}: posición inicial">
@@ -243,6 +320,7 @@ function openExercise(id) {
     </div>
     <h2>${esc(ex.name)}</h2>
     <p class="chips">${ex.primary.map((m) => `<span class="chip">${MUSCLES[m]}</span>`).join('')}${ex.secondary.map((m) => `<span class="chip soft">${MUSCLES[m]}</span>`).join('')}</p>
+    ${flags.length ? `<p class="muted">${flags.join(' · ')}</p>` : ''}
     <p><b>Por qué:</b> ${esc(ex.why)}</p>
     <h3>Técnica</h3>
     <ol>${ex.cues.map((c) => `<li>${esc(c)}</li>`).join('')}</ol>
@@ -253,7 +331,7 @@ function openExercise(id) {
       const active = state.settings.swaps[s.id] === id;
       return `<button class="ghost" data-swap="${s.id}">${active ? `✓ Usando en ${s.routine} (volver a ${esc(EXERCISES[s.exercise].name)})` : `Usar en ${s.routine} en vez de ${esc(EXERCISES[s.exercise].name)}`}</button>`;
     }).join('')}
-    ${history.length ? `<h3>Tu historial</h3><ul class="results">${history.map((h) => `<li><span>${fmtDate(h.date)}</span><span>${setsText(h.e.sets)}</span></li>`).join('')}</ul>` : ''}
+    ${history.length ? `<h3>Tu historial</h3><ul class="results">${history.map((h) => `<li><span>${fmtDate(h.date)}</span><span>${setsText(h.e.sets)}${h.e.pain != null ? ` · dolor ${h.e.pain}` : ''}</span></li>`).join('')}</ul>` : ''}
     <button class="primary" data-close>Cerrar</button>`);
   $('#modal').querySelectorAll('[data-info]').forEach((el) => { el.onclick = () => openExercise(el.dataset.info); });
   $('#modal').querySelectorAll('[data-swap]').forEach((el) => {
@@ -272,9 +350,41 @@ function openExercise(id) {
 function renderProgress() {
   const vol = weeklySets(state.workouts);
   const max = WEEKLY_TARGET.max;
+  const bw = profile().bodyweight;
   const exIds = [...new Set(state.workouts.flatMap((w) => w.entries.map((e) => e.exercise)))];
+  const current = exIds.map((id) => {
+    const prev = lastEntry(state.workouts, id);
+    const slot = Object.values(ROUTINES).flatMap((r) => r.slots).find((s) => slotExercise(s, state.settings.swaps) === id);
+    const sug = slot ? suggestFor(state.workouts, id, slot.reps, profile()) : null;
+    return { id, prev, sug };
+  });
+  const unilateral = exIds.filter((id) => EXERCISES[id].unilateral)
+    .map((id) => ({ id, a: asymmetry(lastEntry(state.workouts, id)?.sets) }))
+    .filter((x) => x.a);
   main.innerHTML = `
     <h2>Progreso</h2>
+    ${current.length ? `
+    <section class="card">
+      <h3>Tus pesos</h3>
+      <p class="muted">Lo último que hiciste y lo que toca la próxima vez.</p>
+      <table class="weights">
+        <thead><tr><th>Ejercicio</th><th>Última vez</th><th>Próxima</th></tr></thead>
+        <tbody>${current.map(({ id, prev, sug }) => `
+          <tr data-info="${id}">
+            <td>${esc(EXERCISES[id].name)}</td>
+            <td>${setsText(prev.sets)}</td>
+            <td><b>${sug?.weight != null ? `${sug.weight} kg × ${sug.reps}` : '—'}</b></td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </section>` : ''}
+    ${unilateral.length ? `
+    <section class="card">
+      <h3>Pierna izquierda vs derecha</h3>
+      <p class="muted">Diferencia en la mejor serie de la última sesión. Objetivo: menos de 10%.</p>
+      ${unilateral.map(({ id, a }) => `
+        <div class="vol"><span>${esc(EXERCISES[id].name)}</span>
+        <div class="bar ${a.pct < 10 ? 'ok' : 'mid'}"><span style="width:${Math.min(100, a.pct * 3)}%"></span></div><b>${a.pct}%</b></div>`).join('')}
+    </section>` : ''}
     <section class="card">
       <h3>Series por músculo esta semana</h3>
       <p class="muted">Objetivo: ${WEEKLY_TARGET.min}–${WEEKLY_TARGET.max} series duras</p>
@@ -288,8 +398,8 @@ function renderProgress() {
     <section class="card">
       <h3>Fuerza (1RM estimado)</h3>
       ${exIds.map((id) => {
-        const points = state.workouts.map((w) => w.entries.find((e) => e.exercise === id)).filter(Boolean).map((e) => bestE1rm(e.sets));
-        return `<div class="trend" data-info="${id}"><span>${esc(EXERCISES[id].name)}</span>${spark(points)}<b>${points[points.length - 1]} kg</b></div>`;
+        const points = state.workouts.map((w) => w.entries.find((e) => e.exercise === id)).filter(Boolean).map((e) => bestE1rm(e.sets, EXERCISES[id], bw));
+        return `<div class="trend" data-info="${id}"><span>${esc(EXERCISES[id].name)}</span>${spark(points)}<b>${Math.round(points[points.length - 1])} kg</b></div>`;
       }).join('')}
     </section>` : ''}
     <section class="card">
@@ -311,8 +421,24 @@ function spark(points) {
 
 // ---------- Ajustes ----------
 function renderSettings() {
+  const p = profile();
   main.innerHTML = `
     <h2>Ajustes</h2>
+    <section class="card">
+      <h3>Tu perfil</h3>
+      <p class="muted">Lo que la app recuerda de ti para adaptar la rutina.</p>
+      <label class="field">Pierna lesionada (va siempre primero)</label>
+      <div class="seg">
+        ${[['L', 'Izquierda'], ['R', 'Derecha']].map(([v, l]) => `<button data-side="${v}" class="${p.injuredSide === v ? 'active' : ''}">${l}</button>`).join('')}
+      </div>
+      <label class="field" for="bw">Peso corporal (kg) · para calcular la carga real en asistidos</label>
+      <input id="bw" class="text" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(p.bodyweight)}" placeholder="p. ej. 78">
+      <label class="toggle"><input type="checkbox" id="recovery" ${p.recovery ? 'checked' : ''}>
+        <span><b>Modo recuperación en piernas</b><br><small class="muted">Saltos de peso a la mitad, empieza ligero, y si marcas dolor &gt; ${PAIN_LIMIT}/10 te baja la carga la próxima vez.</small></span></label>
+      <label class="field" for="notes">Notas</label>
+      <textarea id="notes" rows="9">${esc(p.notes)}</textarea>
+      <p class="muted small" id="saved"></p>
+    </section>
     <section class="card">
       <h3>Días por semana</h3>
       <div class="seg">
@@ -325,9 +451,10 @@ function renderSettings() {
     <section class="card">
       <h3>Reglas para crecer</h3>
       <ul>
-        <li>Cada serie a 0–3 repeticiones del fallo.</li>
+        <li>Cada serie a 0–3 repeticiones del fallo (piernas: 2–3 en reserva mientras te recuperas).</li>
         <li>Rango completo, controlando la bajada.</li>
         <li>Cuando llegues al tope de reps en todas las series, sube peso (la app te avisa).</li>
+        <li>Piernas: la sana nunca hace más que la lesionada. Sin saltos ni impacto hasta el alta.</li>
         <li>Proteína: 1,6–2,2 g/kg al día. Duerme 7–9 h.</li>
         <li>Cada 6–8 semanas, una semana de descarga con la mitad de series.</li>
       </ul>
@@ -340,6 +467,16 @@ function renderSettings() {
       <button class="ghost danger" id="reset">Borrar todo</button>
     </section>
     <p class="muted small">Imágenes: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (dominio público).</p>`;
+  main.querySelectorAll('[data-side]').forEach((b) => {
+    b.onclick = () => { p.injuredSide = b.dataset.side; save(); render(); };
+  });
+  $('#bw').onchange = (ev) => { p.bodyweight = ev.target.value === '' ? null : Number(ev.target.value); save(); };
+  $('#recovery').onchange = (ev) => { p.recovery = ev.target.checked; save(); };
+  $('#notes').oninput = (ev) => {
+    p.notes = ev.target.value;
+    save();
+    $('#saved').textContent = 'Guardado ✓';
+  };
   main.querySelectorAll('[data-days]').forEach((b) => {
     b.onclick = () => { state.settings.daysPerWeek = Number(b.dataset.days); save(); render(); };
   });
@@ -353,25 +490,50 @@ function renderSettings() {
     try {
       const data = JSON.parse(await ev.target.files[0].text());
       if (!Array.isArray(data.workouts)) throw new Error();
-      state = { ...defaults(), ...data };
+      state = hydrate(data);
       save();
-      alert('Copia importada.');
+      toast('Copia importada');
       render();
     } catch {
-      alert('El archivo no es una copia válida.');
+      toast('Ese archivo no es una copia de Me vs Me');
     }
   };
-  $('#reset').onclick = () => {
-    if (!confirm('¿Borrar todos tus entrenos? No se puede deshacer.')) return;
+  $('#reset').onclick = async () => {
+    if (!await ask('¿Borrar todos tus entrenos? No se puede deshacer.', 'Borrar todo')) return;
     state = defaults();
     save();
     render();
   };
 }
 
+// ---------- Diálogos propios (sin confirm/alert del navegador) ----------
+function ask(message, okLabel) {
+  return new Promise((resolve) => {
+    openModal(`
+      <p class="askText">${esc(message)}</p>
+      <button class="primary" id="askOk">${esc(okLabel)}</button>
+      <button class="ghost" id="askCancel">Cancelar</button>`);
+    const done = (v) => { closeModal(); resolve(v); };
+    $('#askOk').onclick = () => done(true);
+    $('#askCancel').onclick = () => done(false);
+    onModalDismiss = () => resolve(false);
+  });
+}
+
+let toastTimer = null;
+function toast(text) {
+  const el = $('#toast');
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 2500);
+}
+
 // ---------- Modal ----------
+let onModalDismiss = null;
 let animTimer = null;
 function openModal(html) {
+  onModalDismiss = null;
   const m = $('#modal');
   $('#modalBody').innerHTML = html;
   m.hidden = false;
@@ -386,7 +548,11 @@ function closeModal() {
   clearInterval(animTimer);
   $('#modal').hidden = true;
 }
-$('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
+$('#modal').onclick = (e) => {
+  if (e.target.id !== 'modal') return;
+  closeModal();
+  onModalDismiss?.();
+};
 
 document.querySelectorAll('nav button').forEach((b) => {
   b.onclick = () => { view = b.dataset.view; render(); window.scrollTo(0, 0); };

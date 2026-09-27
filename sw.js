@@ -1,5 +1,5 @@
 // Funciona sin conexión en el gimnasio.
-const CACHE = 'mevsme-v1';
+const CACHE = 'mevsme-v3';
 const CORE = ['./', 'index.html', 'styles.css', 'js/app.js', 'js/data.js', 'js/logic.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
