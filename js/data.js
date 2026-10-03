@@ -98,7 +98,7 @@ export const EXERCISES = {
     secondary: [],
     increment: 2.5,
     why: 'Sentado, la cadera flexionada estira más los isquios: crece más que el curl tumbado (Maeo 2021).',
-    cues: ['Ajusta el rodillo justo encima de los tobillos (comprueba que no presione la zona de la fractura).', 'Una pierna cada vez: empieza por la lesionada.', 'Inclina el torso ligeramente hacia delante para más estiramiento.', 'Controla la subida 2–3 s.'],
+    cues: ['Ajusta el rodillo justo encima de los tobillos (comprueba que no presione una zona lesionada).', 'Una pierna cada vez: empieza por la lesionada.', 'Inclina el torso ligeramente hacia delante para más estiramiento.', 'Controla la subida 2–3 s.'],
     mistakes: ['Soltar el peso de golpe', 'Rango incompleto'],
     alternatives: ['lyingLegCurl'],
   },
@@ -400,7 +400,7 @@ export const EXERCISES = {
     primary: ['glutes'],
     secondary: ['hamstrings'],
     increment: 5,
-    why: 'Glúteo casi sin cargar la tibia. Opcional: tus glúteos ya están muy desarrollados, así que no está en la rutina.',
+    why: 'Glúteo casi sin cargar la tibia. Opcional: no está en la rutina por defecto.',
     cues: ['Espalda alta en el banco, pies a la anchura de la cadera.', 'Sube hasta alinear rodillas, cadera y hombros; aprieta 1 s.'],
     mistakes: ['Arquear la zona lumbar', 'Pies muy lejos o muy cerca'],
     alternatives: [],
@@ -452,20 +452,14 @@ export const ROUTINES = {
   },
 };
 
-// Lo que la app "recuerda" de ti. Editable en Ajustes → Tu perfil.
+// Perfil por defecto. El tuyo se edita en Ajustes → Tu perfil y viaja en tu copia (JSON).
 export const DEFAULT_PROFILE = {
-  injuredSide: 'L', // pierna lesionada: izquierda
+  injuredSide: null, // 'L' | 'R': pierna que va primero en los unilaterales
   bodyweight: null, // kg, para calcular la carga real en ejercicios asistidos
-  recovery: true,
-  notes: [
-    'Entreno 2 (máximo 3) días por semana.',
-    'Hace ~3 meses: fractura incompleta de tibia izquierda y algo de astillamiento en el fémur. Controlar pesos en piernas.',
-    'Hago los ejercicios de pierna de un lado y luego del otro, empezando por la lesionada (izquierda).',
-    'Glúteos ya muy desarrollados (montaña + muchas sentadillas en el colegio): no priorizar glúteo; hip thrust opcional.',
-    'Prioridades: isquios (curl femoral sentado 2×/semana), hombro lateral y espalda.',
-    'Máquinas: Hammer Strength incline press y prensa, hack squat, pectoral fly/rear delt, elevación lateral, extensión de tríceps y curl de bíceps (Life Fitness), remo, dominadas y fondos asistidos, curl femoral sentado, extensión de gemelos, predicador.',
-  ].join('\n'),
-};
+  recovery: false,
+  // Tus datos personales no viven en el código (el repo es público): llegan al importar tu copia.
+  notes: '',
+}
 
 // Recuperación: umbral de dolor (0–10) por encima del cual se frena la progresión.
 export const PAIN_LIMIT = 3;

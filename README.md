@@ -4,7 +4,7 @@ Web app (PWA) para entrenar **2–3 días por semana** con una rutina full body 
 
 ## Qué hace
 
-La rutina está adaptada a las máquinas de mi gimnasio (Hammer Strength, Life Fitness) y a la recuperación de una fractura incompleta de tibia. El perfil está en `js/data.js` (`DEFAULT_PROFILE`) y se edita en la app, en Ajustes → Tu perfil.
+La rutina está adaptada a máquinas de gimnasio (Hammer Strength, Life Fitness) e incluye un modo para recuperarse de una lesión de pierna. El perfil personal (pierna lesionada, peso, notas) no está en el código: se edita en Ajustes → Tu perfil y viaja dentro de la copia JSON.
 
 - **Entrenar:** alterna automáticamente Full Body A y B. Registra peso y reps, con temporizador de descanso (más corto en superseries).
 - **Pierna por pierna:** los ejercicios unilaterales registran izquierda y derecha, empiezan por la pierna lesionada, proponen a la sana el mismo peso y reps, y avisan si hay más de un 10 % de diferencia.
