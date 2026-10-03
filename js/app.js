@@ -27,6 +27,71 @@ function load() {
 let state = load();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* almacenamiento no disponible */ }
+  cloudPush();
+}
+
+// ---------- Copia en la nube (solo cuando la app corre como artefacto de Claude) ----------
+// Perfil y entreno en curso en `profile/me`; cada entreno terminado en `workouts/<id>`.
+let cloud = null;
+let cloudStatus = 'off'; // off | on | error
+const pushed = new Set();
+let pushTimer = null;
+
+async function cloudInit() {
+  if (!window.claude?.use) return;
+  try {
+    const db = await window.claude.use('db');
+    if (!db) return;
+    const [me, ws] = await Promise.all([db.doc('profile/me').get(), db.collection('workouts').get()]);
+    const remote = ws.docs.map((d) => d.data()).filter((w) => w && Array.isArray(w.entries));
+    const ids = new Set(state.workouts.map((w) => w.id));
+    const missing = remote.filter((w) => !ids.has(w.id));
+    remote.forEach((w) => pushed.add(w.id));
+    if (missing.length) {
+      state.workouts = [...state.workouts, ...missing].sort((a, b) => new Date(a.date) - new Date(b.date));
+    }
+    // Sin nada local (otro dispositivo o datos borrados por el navegador): recupera perfil y entreno en curso.
+    const body = me.exists ? me.data() : null;
+    if (body && !localStorage.getItem(KEY)) {
+      state = hydrate({ ...state, settings: body.settings, current: body.current ?? null });
+    }
+    cloud = db;
+    cloudStatus = 'on';
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* sin almacenamiento */ }
+    cloudPush();
+    if (missing.length || body) render();
+  } catch {
+    cloudStatus = 'error';
+  }
+}
+
+function cloudPush() {
+  if (!cloud) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    try {
+      await cloud.doc('profile/me').set({ settings: state.settings, current: state.current, updatedAt: new Date().toISOString() });
+      for (const w of state.workouts) {
+        if (pushed.has(w.id)) continue;
+        await cloud.doc(`workouts/${w.id}`).set(w);
+        pushed.add(w.id);
+      }
+      cloudStatus = 'on';
+    } catch {
+      cloudStatus = 'error';
+    }
+  }, 800);
+}
+
+async function cloudReset() {
+  if (!cloud) return;
+  try {
+    const ws = await cloud.collection('workouts').get();
+    for (const d of ws.docs) await cloud.doc(`workouts/${d.id}`).delete();
+    pushed.clear();
+  } catch {
+    cloudStatus = 'error';
+  }
 }
 const profile = () => state.settings.profile;
 
@@ -461,7 +526,11 @@ function renderSettings() {
     </section>
     <section class="card">
       <h3>Tus datos</h3>
-      <p class="muted">Se guardan solo en este dispositivo. Exporta una copia de vez en cuando.</p>
+      <p class="muted">${cloudStatus === 'on'
+        ? 'Se guardan en este dispositivo y con copia automática en tu cuenta de Claude ✓'
+        : cloudStatus === 'error'
+          ? 'La copia en la nube falló; tus datos siguen en este dispositivo. Exporta una copia.'
+          : 'Se guardan solo en este dispositivo. Exporta una copia de vez en cuando.'}</p>
       <button class="ghost" id="export">Exportar copia (JSON)</button>
       <label class="ghost file">Importar copia<input type="file" accept="application/json" id="import" hidden></label>
       <button class="ghost danger" id="reset">Borrar todo</button>
@@ -480,10 +549,21 @@ function renderSettings() {
   main.querySelectorAll('[data-days]').forEach((b) => {
     b.onclick = () => { state.settings.daysPerWeek = Number(b.dataset.days); save(); render(); };
   });
-  $('#export').onclick = () => {
+  $('#export').onclick = async () => {
+    const filename = `me-vs-me-${new Date().toISOString().slice(0, 10)}.json`;
+    const downloads = window.claude?.use ? await window.claude.use('downloads') : null;
+    if (downloads) {
+      try {
+        await downloads.save({ filename, data: JSON.stringify(state, null, 2) });
+        toast('Copia guardada');
+      } catch (err) {
+        if (err?.code !== 'declined') toast('No se pudo guardar la copia aquí');
+      }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
-    a.download = `me-vs-me-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
   };
   $('#import').onchange = async (ev) => {
@@ -501,6 +581,7 @@ function renderSettings() {
   $('#reset').onclick = async () => {
     if (!await ask('¿Borrar todos tus entrenos? No se puede deshacer.', 'Borrar todo')) return;
     state = defaults();
+    await cloudReset();
     save();
     render();
   };
@@ -563,3 +644,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 render();
+cloudInit();
