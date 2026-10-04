@@ -6,7 +6,7 @@ import {
 
 // ---------- Estado persistente ----------
 const KEY = 'mevsme.v1';
-const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, profile: { ...DEFAULT_PROFILE } }, workouts: [], current: null });
+const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, sound: { beeps: true, voice: true, awake: true }, profile: { ...DEFAULT_PROFILE } }, workouts: [], current: null });
 
 function hydrate(data) {
   const d = defaults();
@@ -14,7 +14,7 @@ function hydrate(data) {
   return {
     ...d,
     ...data,
-    settings: { ...d.settings, ...s, profile: { ...d.settings.profile, ...s.profile, injuredSide: s.profile?.injuredSide ?? d.settings.profile.injuredSide } },
+    settings: { ...d.settings, ...s, sound: { ...d.settings.sound, ...s.sound }, profile: { ...d.settings.profile, ...s.profile, injuredSide: s.profile?.injuredSide ?? d.settings.profile.injuredSide } },
   };
 }
 function load() {
@@ -155,6 +155,7 @@ function bindGo() {
 
 function start(key) {
   state.current = newWorkout(key, state.workouts, state.settings.swaps, profile());
+  keepAwake(true);
   save();
   render();
 }
@@ -270,6 +271,8 @@ function renderWorkout() {
   $('#discard').onclick = async () => {
     if (!await ask('¿Descartar este entreno?', 'Descartar')) return;
     state.current = null;
+    stopTimer();
+    keepAwake(false);
     save();
     render();
   };
@@ -288,6 +291,7 @@ async function finish() {
   state.current = null;
   save();
   stopTimer();
+  keepAwake(false);
   const wins = results.filter((r) => r.diff > 0).length;
   const compared = results.filter((r) => r.before != null).length;
   const asyms = w.entries
@@ -318,25 +322,101 @@ function startTimer(seconds) {
   stopTimer();
   const el = $('#timer');
   const end = Date.now() + seconds * 1000;
+  let lastCue = null;
   const tick = () => {
     const left = Math.max(0, Math.round((end - Date.now()) / 1000));
     el.innerHTML = `Descanso <b>${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</b> <button id="skip">Saltar</button>`;
     $('#skip').onclick = stopTimer;
+    // Avisos: uno suave a los 10 s, cuenta atrás 3-2-1 y salida.
+    if (left !== lastCue && (left === 10 || (left <= 3 && left > 0))) {
+      lastCue = left;
+      cue(left === 10 ? 'warn' : 'count');
+    }
     if (!left) {
-      navigator.vibrate?.([200, 100, 200]);
-      el.innerHTML = '¡A por la siguiente serie! <button id="skip">OK</button>';
+      cue('go');
+      el.innerHTML = '<b class="go">¡GO, GO, GO!</b> <button id="skip">OK</button>';
+      el.classList.add('goFlash');
       $('#skip').onclick = stopTimer;
       clearInterval(timer);
     }
   };
+  el.classList.remove('goFlash');
   el.hidden = false;
   tick();
-  timer = setInterval(tick, 1000);
+  timer = setInterval(tick, 250);
 }
 function stopTimer() {
   clearInterval(timer);
   $('#timer').hidden = true;
+  $('#timer').classList.remove('goFlash');
 }
+
+// ---------- Sonido y pantalla encendida ----------
+// El navegador solo deja sonar audio después de un toque: se "desbloquea" en el primer clic.
+let audioCtx = null;
+function unlockAudio() {
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch { /* sin Web Audio */ }
+}
+document.addEventListener('pointerdown', unlockAudio, { capture: true });
+
+function tone(freq, start, dur, vol = 0.35) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + start;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+function speak(text) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'es-ES';
+    u.rate = 1.15;
+    u.pitch = 1.1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch { /* sin voz */ }
+}
+
+function cue(kind) {
+  const snd = state.settings.sound;
+  if (kind === 'go') navigator.vibrate?.([250, 100, 250, 100, 400]);
+  else navigator.vibrate?.(80);
+  if (snd.beeps) {
+    if (kind === 'warn') tone(660, 0, 0.12, 0.2);
+    if (kind === 'count') tone(880, 0, 0.12);
+    if (kind === 'go') { tone(880, 0, 0.15); tone(1175, 0.18, 0.15); tone(1568, 0.36, 0.45); }
+  }
+  if (snd.voice && kind === 'go') setTimeout(() => speak('¡Go, go, go!'), snd.beeps ? 850 : 0);
+}
+
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && state.settings.sound.awake && 'wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!on && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch { /* el navegador no lo permite */ }
+}
+// Al volver a la app el bloqueo se pierde: se pide de nuevo si hay entreno en curso.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.current) keepAwake(true);
+});
 
 // ---------- Biblioteca de ejercicios ----------
 function tiles(ids) {
@@ -505,6 +585,17 @@ function renderSettings() {
       <p class="muted small" id="saved"></p>
     </section>
     <section class="card">
+      <h3>Avisos del descanso</h3>
+      <p class="muted">Pitido suave a los 10 s, cuenta atrás 3-2-1 y salida con vibración.</p>
+      <label class="toggle"><input type="checkbox" id="sndBeeps" ${state.settings.sound.beeps ? 'checked' : ''}>
+        <span><b>Pitidos</b></span></label>
+      <label class="toggle"><input type="checkbox" id="sndVoice" ${state.settings.sound.voice ? 'checked' : ''}>
+        <span><b>Voz "¡Go, go, go!"</b> al terminar el descanso</span></label>
+      <label class="toggle"><input type="checkbox" id="sndAwake" ${state.settings.sound.awake ? 'checked' : ''}>
+        <span><b>Pantalla encendida durante el entreno</b><br><small class="muted">Si el móvil se bloquea, el navegador pausa el temporizador y no suenan los avisos.</small></span></label>
+      <button class="ghost" id="sndTest">Probar sonido</button>
+    </section>
+    <section class="card">
       <h3>Días por semana</h3>
       <div class="seg">
         ${[2, 3].map((d) => `<button data-days="${d}" class="${state.settings.daysPerWeek === d ? 'active' : ''}">${d} días</button>`).join('')}
@@ -545,6 +636,14 @@ function renderSettings() {
     p.notes = ev.target.value;
     save();
     $('#saved').textContent = 'Guardado ✓';
+  };
+  for (const [id, key] of [['sndBeeps', 'beeps'], ['sndVoice', 'voice'], ['sndAwake', 'awake']]) {
+    $(`#${id}`).onchange = (ev) => { state.settings.sound[key] = ev.target.checked; save(); };
+  }
+  $('#sndTest').onclick = () => {
+    unlockAudio();
+    cue('count');
+    setTimeout(() => cue('go'), 600);
   };
   main.querySelectorAll('[data-days]').forEach((b) => {
     b.onclick = () => { state.settings.daysPerWeek = Number(b.dataset.days); save(); render(); };
