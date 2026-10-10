@@ -187,6 +187,45 @@ export function compare(workout, previousWorkouts, bodyweight = null) {
     });
 }
 
+// Une dos copias (p. ej. de dos móviles). Junta los entrenos de ambas, incluidos los que quedaron
+// sin terminar, y recompone en uno solo los de la misma rutina hechos el mismo día: por cada
+// ejercicio se queda con la versión que tiene más series hechas. El perfil es el de `local`.
+export function mergeStates(local, incoming) {
+  const doneOnly = (w) => ({
+    ...w,
+    entries: w.entries.map((e) => ({ ...e, sets: e.sets.filter((s) => s.done) })).filter((e) => e.sets.length),
+  });
+  const pool = [...(local.workouts || []), ...(incoming.workouts || [])];
+  for (const c of [local.current, incoming.current]) {
+    if (c?.entries?.some((e) => e.sets.some((s) => s.done))) pool.push(doneOnly(c));
+  }
+  const groups = new Map();
+  for (const w of pool) {
+    const key = `${w.routine}|${new Date(w.date).toDateString()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(w);
+  }
+  const doneCount = (e) => e.sets.filter((s) => s.done).length;
+  const workouts = [...groups.values()].map((ws) => {
+    if (ws.length === 1) return ws[0];
+    const bySlot = new Map();
+    for (const w of ws) {
+      for (const e of w.entries) {
+        const k = e.slot || e.exercise;
+        const prev = bySlot.get(k);
+        const best = !prev || doneCount(e) > doneCount(prev) ? e : prev;
+        const pains = [e.pain, prev?.pain].filter((p) => p != null);
+        bySlot.set(k, pains.length ? { ...best, pain: Math.max(...pains) } : best);
+      }
+    }
+    const first = ws.reduce((a, b) => (new Date(a.date) <= new Date(b.date) ? a : b));
+    const entries = [...bySlot.values()].sort((a, b) => String(a.slot).localeCompare(String(b.slot), 'es', { numeric: true }));
+    return { ...first, entries };
+  });
+  workouts.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return { ...local, workouts, current: null };
+}
+
 function round(n) {
   return Math.round(n * 100) / 100;
 }

@@ -131,3 +131,39 @@ test('formatSets compacta series iguales y separa lados', async () => {
   assert.equal(formatSets([set(40, 15, true, 'R'), set(40, 15, true, 'L'), set(40, 15, true, 'R'), set(40, 12, true, 'L'), set(9, 9, false, 'L')]),
     'Der 40×15 ×2 · Izq 40×15, 40×12');
 });
+
+test('mergeStates une una sesión partida entre dos móviles', async () => {
+  const { mergeStates } = await import('../js/logic.js');
+  // Móvil 1: se apagó a mitad de la rutina A (entreno sin terminar).
+  const phone1 = {
+    settings: { daysPerWeek: 2 },
+    workouts: [{ id: 'old', routine: 'B', date: '2026-10-06T15:00:00Z', entries: [{ slot: 'B1', exercise: 'hackSquat', sets: [set(40, 12)] }] }],
+    current: { id: 'p1', routine: 'A', date: '2026-10-09T15:00:00Z', entries: [
+      { slot: 'A1', exercise: 'hsLegPress', pain: 2, sets: [set(30, 14, true, 'L'), set(30, 14, true, 'R')] },
+      { slot: 'A2', exercise: 'hsInclinePress', sets: [set(85, 8), set(85, 8), set(85, 7)] },
+      { slot: 'A3', exercise: 'assistedChin', sets: [set(40, 8), set(40, '', false)] },
+    ] },
+  };
+  // Móvil 2: siguió la misma rutina y la terminó.
+  const phone2 = {
+    settings: { daysPerWeek: 3 },
+    workouts: [
+      { id: 'old', routine: 'B', date: '2026-10-06T15:00:00Z', entries: [{ slot: 'B1', exercise: 'hackSquat', sets: [set(40, 12)] }] },
+      { id: 'p2', routine: 'A', date: '2026-10-09T15:40:00Z', entries: [
+        { slot: 'A3', exercise: 'assistedChin', sets: [set(40, 9), set(40, 8), set(40, 8)] },
+        { slot: 'A4', exercise: 'seatedLegCurl', pain: 1, sets: [set(15, 15, true, 'L'), set(15, 15, true, 'R')] },
+      ] },
+    ],
+    current: null,
+  };
+  const m = mergeStates(phone1, phone2);
+  assert.equal(m.workouts.length, 2); // el B repetido no se duplica
+  const a = m.workouts[1];
+  assert.equal(a.routine, 'A');
+  assert.equal(a.date, '2026-10-09T15:00:00Z'); // hora de inicio real
+  assert.deepEqual(a.entries.map((e) => e.slot), ['A1', 'A2', 'A3', 'A4']);
+  assert.equal(a.entries[2].sets.length, 3); // dominadas: gana la versión con más series hechas
+  assert.ok(a.entries.every((e) => e.sets.every((s) => s.done)));
+  assert.equal(m.current, null);
+  assert.equal(m.settings.daysPerWeek, 2); // el perfil es el del móvil que importa
+});

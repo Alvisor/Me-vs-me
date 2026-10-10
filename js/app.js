@@ -1,7 +1,7 @@
 import { EXERCISES, ROUTINES, MUSCLES, WEEKLY_TARGET, DEFAULT_PROFILE, PAIN_LIMIT, imgUrl } from './data.js';
 import {
   suggestFor, lastEntry, newWorkout, nextRoutineKey, weeklySets, sessionsThisWeek, compare, bestE1rm,
-  asymmetry, slotExercise, formatSets, SIDE_LABEL,
+  asymmetry, slotExercise, formatSets, mergeStates, SIDE_LABEL,
 } from './logic.js';
 
 // ---------- Estado persistente ----------
@@ -54,6 +54,10 @@ async function cloudInit() {
     const body = me.exists ? me.data() : null;
     if (body && !localStorage.getItem(KEY)) {
       state = hydrate({ ...state, settings: body.settings, current: body.current ?? null });
+    } else if (body?.current && !state.current && !state.workouts.some((w) => w.id === body.current.id)) {
+      // Entreno empezado en otro móvil y sin terminar: se continúa aquí.
+      state.current = body.current;
+      toast('Seguimos el entreno que empezaste en otro móvil');
     }
     cloud = db;
     cloudStatus = 'on';
@@ -666,16 +670,32 @@ function renderSettings() {
     a.click();
   };
   $('#import').onchange = async (ev) => {
+    let data;
     try {
-      const data = JSON.parse(await ev.target.files[0].text());
+      data = JSON.parse(await ev.target.files[0].text());
       if (!Array.isArray(data.workouts)) throw new Error();
-      state = hydrate(data);
-      save();
-      toast('Copia importada');
-      render();
     } catch {
       toast('Ese archivo no es una copia de Me vs Me');
+      return;
+    } finally {
+      ev.target.value = '';
     }
+    const n = data.workouts.length + (data.current ? 1 : 0);
+    const choice = await choose(
+      `La copia tiene ${n} entreno${n === 1 ? '' : 's'}. ¿Qué hago con ella?`,
+      [
+        ['merge', 'Unir con mis datos', 'Junta los entrenos de los dos móviles y recompone las sesiones partidas.'],
+        ['replace', 'Reemplazar todo', 'Borra lo de este móvil y deja solo la copia.'],
+      ],
+    );
+    if (!choice) return;
+    const before = state.workouts.length;
+    state = choice === 'merge' ? hydrate(mergeStates(state, data)) : hydrate(data);
+    save();
+    toast(choice === 'merge'
+      ? `Copia unida: ${state.workouts.length} entrenos (${state.workouts.length - before >= 0 ? '+' : ''}${state.workouts.length - before})`
+      : 'Copia importada');
+    render();
   };
   $('#reset').onclick = async () => {
     if (!await ask('¿Borrar todos tus entrenos? No se puede deshacer.', 'Borrar todo')) return;
@@ -697,6 +717,20 @@ function ask(message, okLabel) {
     $('#askOk').onclick = () => done(true);
     $('#askCancel').onclick = () => done(false);
     onModalDismiss = () => resolve(false);
+  });
+}
+
+function choose(message, options) {
+  return new Promise((resolve) => {
+    openModal(`
+      <p class="askText">${esc(message)}</p>
+      ${options.map(([v, label, hint], i) => `
+        <button class="${i === 0 ? 'primary' : 'ghost'} choice" data-v="${v}">${esc(label)}<small>${esc(hint)}</small></button>`).join('')}
+      <button class="ghost" id="askCancel">Cancelar</button>`);
+    const done = (v) => { closeModal(); resolve(v); };
+    $('#modal').querySelectorAll('.choice').forEach((b) => { b.onclick = () => done(b.dataset.v); });
+    $('#askCancel').onclick = () => done(null);
+    onModalDismiss = () => resolve(null);
   });
 }
 

@@ -207,3 +207,4 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 #timer .go { font-size: 1.2rem; letter-spacing: .04em; }
 @keyframes pulse { 50% { transform: translateX(-50%) scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { #timer.goFlash { animation: none; } }
+.choice small { display: block; font-weight: 400; font-size: .8rem; opacity: .85; margin-top: 2px; }
