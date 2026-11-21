@@ -421,35 +421,64 @@ export const EXERCISES = {
 
 // Cada "slot" es un hueco de la rutina que el usuario puede sustituir por una alternativa.
 // superset: slots con la misma letra se alternan con descanso corto.
-// Rutina adaptada a las máquinas de tu gimnasio y a la recuperación de la pierna.
+// technique '37': método 3/7 → 2 bloques de mini-series 3-4-5-6-7 con 15 s entre ellas (sets = bloques).
+// Plan v2 (nov 2026): prioridades (hombro lateral, isquios, espalda) primero; 3/7 en aislamientos del tren superior.
 export const ROUTINES = {
   A: {
     name: 'Full Body A',
     slots: [
-      { id: 'A1', exercise: 'hsLegPress', sets: 3, reps: [10, 15], rest: 150 },
-      { id: 'A2', exercise: 'hsInclinePress', sets: 3, reps: [6, 10], rest: 150 },
-      { id: 'A3', exercise: 'assistedChin', sets: 4, reps: [6, 10], rest: 150 },
-      { id: 'A4', exercise: 'seatedLegCurl', sets: 3, reps: [10, 15], rest: 90 },
-      { id: 'A5', exercise: 'machineLateral', sets: 3, reps: [12, 20], rest: 60 },
-      { id: 'A6', exercise: 'machineTriceps', sets: 3, reps: [10, 15], rest: 60, superset: 'x' },
-      { id: 'A7', exercise: 'machineCurl', sets: 3, reps: [10, 15], rest: 60, superset: 'x' },
-      { id: 'A8', exercise: 'calfExtension', sets: 3, reps: [12, 20], rest: 60 },
+      { id: 'A1', exercise: 'machineLateral', technique: '37', sets: 2, reps: [3, 7], rest: 150 },
+      { id: 'A2', exercise: 'seatedLegCurl', sets: 4, reps: [10, 15], rest: 75, superset: 'p' },
+      { id: 'A3', exercise: 'rearDeltFly', sets: 3, reps: [12, 20], rest: 75, superset: 'p' },
+      { id: 'A4', exercise: 'hsLegPress', sets: 3, reps: [10, 15], rest: 120 },
+      { id: 'A5', exercise: 'hsInclinePress', sets: 3, reps: [6, 10], rest: 90, superset: 'q' },
+      { id: 'A6', exercise: 'assistedChin', sets: 5, reps: [6, 10], rest: 90, superset: 'q' },
+      { id: 'A7', exercise: 'machineTriceps', technique: '37', sets: 2, reps: [3, 7], rest: 150 },
+      { id: 'A8', exercise: 'calfExtension', sets: 3, reps: [12, 20], rest: 75 },
     ],
   },
   B: {
     name: 'Full Body B',
     slots: [
-      { id: 'B1', exercise: 'hackSquat', sets: 3, reps: [10, 15], rest: 150 },
-      { id: 'B2', exercise: 'seatedLegCurl', sets: 3, reps: [10, 15], rest: 90 },
-      { id: 'B3', exercise: 'assistedDip', sets: 3, reps: [6, 10], rest: 150 },
-      { id: 'B4', exercise: 'machineRow', sets: 4, reps: [8, 12], rest: 120 },
-      { id: 'B5', exercise: 'pecFly', sets: 3, reps: [10, 15], rest: 75 },
-      { id: 'B6', exercise: 'machineLateral', sets: 3, reps: [12, 20], rest: 60, superset: 'y' },
-      { id: 'B7', exercise: 'rearDeltFly', sets: 2, reps: [12, 20], rest: 60, superset: 'y' },
-      { id: 'B8', exercise: 'reversePreacher', sets: 2, reps: [10, 15], rest: 60 },
-      { id: 'B9', exercise: 'calfExtension', sets: 3, reps: [12, 20], rest: 60 },
+      { id: 'B1', exercise: 'machineLateral', sets: 4, reps: [12, 20], rest: 75, superset: 'p' },
+      { id: 'B2', exercise: 'seatedLegCurl', sets: 4, reps: [10, 15], rest: 75, superset: 'p' },
+      { id: 'B3', exercise: 'hackSquat', sets: 3, reps: [10, 15], rest: 150 },
+      { id: 'B4', exercise: 'machineRow', sets: 5, reps: [8, 12], rest: 90, superset: 'q' },
+      { id: 'B5', exercise: 'assistedDip', sets: 3, reps: [6, 10], rest: 90, superset: 'q' },
+      { id: 'B6', exercise: 'pecFly', technique: '37', sets: 2, reps: [3, 7], rest: 150 },
+      { id: 'B7', exercise: 'rearDeltFly', sets: 2, reps: [12, 20], rest: 75 },
+      { id: 'B8', exercise: 'machineCurl', technique: '37', sets: 2, reps: [3, 7], rest: 150 },
+      { id: 'B9', exercise: 'calfExtension', sets: 2, reps: [12, 20], rest: 75 },
     ],
   },
+  // Día opcional (3.ª sesión de la semana): solo prioridades, ~35 min, sin cuádriceps pesado.
+  C: {
+    name: 'Full Body C (opcional)',
+    optional: true,
+    slots: [
+      { id: 'C1', exercise: 'machineLateral', sets: 3, reps: [12, 20], rest: 75, superset: 'p' },
+      { id: 'C2', exercise: 'seatedLegCurl', sets: 3, reps: [10, 15], rest: 75, superset: 'p' },
+      { id: 'C3', exercise: 'assistedChin', sets: 3, reps: [6, 10], rest: 90, superset: 'q' },
+      { id: 'C4', exercise: 'rearDeltFly', sets: 3, reps: [12, 20], rest: 90, superset: 'q' },
+      { id: 'C5', exercise: 'reversePreacher', technique: '37', sets: 2, reps: [3, 7], rest: 150 },
+    ],
+  },
+};
+
+// Pesos de partida del plan v2, calculados con los registros de oct-nov 2026 (≈70 % del 1RM
+// estimado en los 3/7; reinicio de los ejercicios estancados). Solo se usan si ya había historial
+// antes del cambio de plan y aún no se ha hecho ese ejercicio con esa técnica en el plan nuevo.
+export const PLAN_V2_START = {
+  normal: { machineLateral: 35, rearDeltFly: 30, hsLegPress: 37.5, hsInclinePress: 90, assistedChin: 35, machineRow: 50, assistedDip: 35 },
+  '37': { machineLateral: 35, machineTriceps: 42.5, pecFly: 50, machineCurl: 17.5, reversePreacher: 20 },
+};
+
+// Revisión: cada cuántos días toca y cuándo un cambio de cinta métrica es real (no ruido).
+export const REVIEW = {
+  everyDays: 14,
+  tapeEveryDays: 28,
+  realChangeCm: { arm: 0.6, thigh: 1.3, waist: 1, chest: 1 },
+  weightGainPer2Weeks: [0.4, 0.8],
 };
 
 // Perfil por defecto. El tuyo se edita en Ajustes → Tu perfil y viaja en tu copia (JSON).

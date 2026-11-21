@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  suggest37, exerciseTrend, reviewDelta, LADDER,
   suggest, suggestFor, e1rm, weeklySets, nextRoutineKey, newWorkout, compare, lastEntry, asymmetry, sideOrder, slotExercise,
 } from '../js/logic.js';
 
@@ -84,13 +85,12 @@ test('nuevo entreno: unilateral alterna lados empezando por la lesionada y preca
     set(40, 15, true, 'R'), set(40, 15, true, 'L'), set(40, 15, true, 'R'), set(40, 15, true, 'L'),
   ] }] }];
   const w = newWorkout('A', history, {}, { injuredSide: 'R', recovery: true });
-  const e = w.entries[0];
-  assert.equal(e.exercise, 'hsLegPress');
+  const e = w.entries.find((x) => x.exercise === 'hsLegPress');
   assert.equal(e.sets.length, 6);
   assert.deepEqual(e.sets.map((s) => s.side), ['R', 'L', 'R', 'L', 'R', 'L']);
   assert.equal(e.sets[0].weight, 42.5);
   assert.equal(e.pain, null);
-  assert.equal('pain' in w.entries[1], false); // press inclinado no es pierna
+  assert.equal('pain' in w.entries.find((x) => x.exercise === 'hsInclinePress'), false); // no es pierna
 });
 
 test('sugerencia unilateral usa solo la pierna lesionada', () => {
@@ -166,4 +166,57 @@ test('mergeStates une una sesión partida entre dos móviles', async () => {
   assert.ok(a.entries.every((e) => e.sets.every((s) => s.done)));
   assert.equal(m.current, null);
   assert.equal(m.settings.daysPerWeek, 2); // el perfil es el del móvil que importa
+});
+
+test('3/7: dos bloques de 3-4-5-6-7, sube peso solo si completa los dos', async () => {
+  const { newWorkout: nw } = await import('../js/logic.js');
+  const w = nw('B', [], {}, {});
+  const fly = w.entries.find((e) => e.exercise === 'pecFly');
+  assert.equal(fly.technique, '37');
+  assert.deepEqual(fly.sets.map((s) => s.target), [...LADDER, ...LADDER]);
+  const full = fly.sets.map((s) => ({ ...s, weight: 50, reps: s.target, done: true }));
+  assert.equal(suggest37(full, { increment: 2.5 }).weight, 52.5);
+  const short = full.map((s, i) => (i === 9 ? { ...s, reps: 5 } : s));
+  assert.equal(suggest37(short, { increment: 2.5 }).weight, 50);
+});
+
+test('plan v2: pesos de partida solo con historial previo y hasta hacerlo en el plan nuevo', async () => {
+  const { suggestFor: sf } = await import('../js/logic.js');
+  const old = [{ date: '2026-11-15T10:00:00Z', routine: 'A', entries: [{ exercise: 'machineCurl', sets: [set(20, 8), set(20, 8)] }] }];
+  const planStart = '2026-11-21T00:00:00Z';
+  assert.equal(sf(old, 'machineCurl', [3, 7], {}, { technique: '37', planStart }).weight, 17.5);
+  assert.equal(sf([], 'machineCurl', [3, 7], {}, { technique: '37', planStart }).weight, null); // usuario nuevo: sin semilla
+  const after = [...old, { date: '2026-11-22T10:00:00Z', routine: 'B', entries: [{ exercise: 'machineCurl', technique: '37',
+    sets: LADDER.concat(LADDER).map((t) => ({ target: t, weight: 17.5, reps: t, done: true })) }] }];
+  assert.equal(sf(after, 'machineCurl', [3, 7], {}, { technique: '37', planStart }).weight, 20);
+  // Las mini-series del 3/7 no contaminan la progresión normal del mismo ejercicio.
+  assert.equal(sf(after, 'machineCurl', [10, 15], {}, { technique: 'normal' }).weight, 20);
+});
+
+test('alternancia A/B ignora el día C y el 3/7 cuenta 4 series', async () => {
+  const { nextRoutineKey: nk, weeklySets: ws } = await import('../js/logic.js');
+  assert.equal(nk([{ routine: 'A' }, { routine: 'C' }]), 'B');
+  const v = ws([{ date: '2026-11-18T10:00:00', entries: [{ exercise: 'machineCurl', technique: '37',
+    sets: LADDER.concat(LADDER).map((t) => ({ target: t, weight: 17.5, reps: t, done: true })) }] }], new Date('2026-11-19T12:00:00'));
+  assert.equal(v.biceps, 4);
+});
+
+test('tendencia: progresa, estancado y retrocede', () => {
+  const w = (wt, reps) => ({ date: '2026-11-01', routine: 'A', entries: [{ exercise: 'machineCurl', sets: [set(wt, reps)] }] });
+  assert.equal(exerciseTrend([w(20, 10), w(20, 12)], 'machineCurl').status, 'nuevo');
+  assert.equal(exerciseTrend([w(20, 10), w(20, 12), w(20, 14)], 'machineCurl').status, 'progresa');
+  assert.equal(exerciseTrend([w(20, 15), w(20, 15), w(20, 14), w(20, 15)], 'machineCurl').status, 'estancado');
+  assert.equal(exerciseTrend([w(20, 15), w(20, 10), w(20, 8)], 'machineCurl').status, 'retrocede');
+});
+
+test('revisión: cambios de cinta reales solo por encima del umbral', () => {
+  const d = reviewDelta([
+    { date: '2026-11-01', weight: 76, arm: 34, thigh: 56 },
+    { date: '2026-11-29', weight: 76.8, arm: 34.4, thigh: 57.5 },
+  ], { arm: 0.6, thigh: 1.3 });
+  assert.equal(d.days, 28);
+  assert.equal(d.fields.weight.delta, 0.8);
+  assert.equal(d.fields.arm.real, false);
+  assert.equal(d.fields.thigh.real, true);
+  assert.equal(reviewDelta([{ date: '2026-11-01', weight: 76 }], {}), null);
 });

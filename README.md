@@ -10,6 +10,9 @@ La rutina está adaptada a máquinas de gimnasio (Hammer Strength, Life Fitness)
 - **Pierna por pierna:** los ejercicios unilaterales registran izquierda y derecha, empiezan por la pierna lesionada, proponen a la sana el mismo peso y reps, y avisan si hay más de un 10 % de diferencia.
 - **Modo recuperación:** en piernas los saltos de peso son a la mitad. Tras cada ejercicio marcas el dolor (0–10): con más de 3 la carga baja un 10 %, y con 3 se mantiene.
 - **Asistidos:** en dominadas y fondos asistidos el peso es la ayuda, así que progresar es bajarla.
+- **Plan v2 (nov 2026):** prioridades (hombro lateral, isquios, espalda) al principio, superseries, día C opcional y pesos de partida calculados con el historial.
+- **Método 3/7:** en aislamientos del tren superior, 2 bloques de 3-4-5-6-7 con temporizador de 15 s; cuenta como ~4 series por semana.
+- **Seguimiento:** revisión quincenal (peso) y mensual (cinta métrica y prueba de simetría de piernas), con estado de cada ejercicio (progresa, estancado o retrocede).
 - **Progresión automática (doble progresión):** si llegas al tope de reps en todas las series, te sugiere subir peso; si no, mismo peso y +1 rep.
 - **Me vs Me:** al terminar, compara cada ejercicio con la última vez (1RM estimado).
 - **Ejercicios:** técnica paso a paso, errores comunes, músculos, por qué se eligió e imagen animada inicio/final. Permite sustituir ejercicios por alternativas.

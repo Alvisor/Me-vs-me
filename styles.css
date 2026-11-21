@@ -208,3 +208,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 @keyframes pulse { 50% { transform: translateX(-50%) scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { #timer.goFlash { animation: none; } }
 .choice small { display: block; font-weight: 400; font-size: .8rem; opacity: .85; margin-top: 2px; }
+
+/* Plan v2: 3/7, tendencias, revisión */
+.sets .row.blockEnd { margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.trend-progresa { color: var(--ok); }
+.trend-estancado { color: var(--mid); }
+.trend-retrocede { color: var(--bad); }
+.trend-nuevo { color: var(--muted); }
+details { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+details summary { cursor: pointer; font-weight: 600; }

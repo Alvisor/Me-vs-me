@@ -1,12 +1,12 @@
-import { EXERCISES, ROUTINES, MUSCLES, WEEKLY_TARGET, DEFAULT_PROFILE, PAIN_LIMIT, imgUrl } from './data.js';
+import { EXERCISES, ROUTINES, MUSCLES, WEEKLY_TARGET, DEFAULT_PROFILE, PAIN_LIMIT, REVIEW, imgUrl } from './data.js';
 import {
   suggestFor, lastEntry, newWorkout, nextRoutineKey, weeklySets, sessionsThisWeek, compare, bestE1rm,
-  asymmetry, slotExercise, formatSets, mergeStates, SIDE_LABEL,
+  asymmetry, slotExercise, formatSets, mergeStates, exerciseTrend, reviewDelta, daysSince, LADDER, SIDE_LABEL,
 } from './logic.js';
 
 // ---------- Estado persistente ----------
 const KEY = 'mevsme.v1';
-const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, sound: { beeps: true, voice: true, awake: true }, profile: { ...DEFAULT_PROFILE } }, workouts: [], current: null });
+const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, sound: { beeps: true, voice: true, awake: true }, profile: { ...DEFAULT_PROFILE } }, workouts: [], measurements: [], current: null });
 
 function hydrate(data) {
   const d = defaults();
@@ -14,7 +14,9 @@ function hydrate(data) {
   return {
     ...d,
     ...data,
-    settings: { ...d.settings, ...s, sound: { ...d.settings.sound, ...s.sound }, profile: { ...d.settings.profile, ...s.profile, injuredSide: s.profile?.injuredSide ?? d.settings.profile.injuredSide } },
+    measurements: Array.isArray(data?.measurements) ? data.measurements : [],
+    // Fecha del cambio al plan v2: a partir de aquí se usan sus pesos de partida.
+    settings: { ...d.settings, ...s, planStart: s.planStart || new Date().toISOString(), sound: { ...d.settings.sound, ...s.sound }, profile: { ...d.settings.profile, ...s.profile, injuredSide: s.profile?.injuredSide ?? d.settings.profile.injuredSide } },
   };
 }
 function load() {
@@ -53,7 +55,7 @@ async function cloudInit() {
     // Sin nada local (otro dispositivo o datos borrados por el navegador): recupera perfil y entreno en curso.
     const body = me.exists ? me.data() : null;
     if (body && !localStorage.getItem(KEY)) {
-      state = hydrate({ ...state, settings: body.settings, current: body.current ?? null });
+      state = hydrate({ ...state, settings: body.settings, current: body.current ?? null, measurements: body.measurements ?? [] });
     } else if (body?.current && !state.current && !state.workouts.some((w) => w.id === body.current.id)) {
       // Entreno empezado en otro móvil y sin terminar: se continúa aquí.
       state.current = body.current;
@@ -74,7 +76,7 @@ function cloudPush() {
   clearTimeout(pushTimer);
   pushTimer = setTimeout(async () => {
     try {
-      await cloud.doc('profile/me').set({ settings: state.settings, current: state.current, updatedAt: new Date().toISOString() });
+      await cloud.doc('profile/me').set({ settings: state.settings, current: state.current, measurements: state.measurements, updatedAt: new Date().toISOString() });
       for (const w of state.workouts) {
         if (pushed.has(w.id)) continue;
         await cloud.doc(`workouts/${w.id}`).set(w);
@@ -104,7 +106,10 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' });
 const setsText = formatSets;
-const slotOf = (w, slotId) => ROUTINES[w.routine].slots.find((s) => s.id === slotId);
+const slotOf = (w, slotId) => ROUTINES[w.routine]?.slots.find((s) => s.id === slotId) || { id: slotId, sets: 3, reps: [10, 15], rest: 90 };
+const techOf = (slot) => slot.technique || 'normal';
+const planOpts = (slot) => ({ technique: techOf(slot), planStart: state.settings.planStart });
+const lastReview = () => [...state.measurements].sort((a, b) => new Date(a.date) - new Date(b.date)).at(-1);
 const sideName = (side) => (side === 'L' ? 'izquierda' : 'derecha');
 
 let view = 'train';
@@ -129,6 +134,7 @@ function renderTrain() {
       <p class="big">${done} / ${goal} <span class="muted">entrenos</span></p>
       <div class="bar"><span style="width:${Math.min(100, (done / goal) * 100)}%"></span></div>
     </section>
+    ${reviewDue() ? `<section class="card notice">📋 Toca tu <b>revisión ${reviewDue()}</b>: peso${reviewDue() === 'mensual' ? ', cinta métrica y prueba de piernas' : ''}. <a href="#" data-go="progress">Hacerla en Progreso</a></section>` : ''}
     ${p.recovery && !p.injuredSide ? `<section class="card notice">Dime qué pierna fue la lesionada en <a href="#" data-go="settings">Ajustes → Tu perfil</a> para que la app la ponga siempre primero.</section>` : ''}
     <section class="card">
       <p class="muted">Próximo entreno</p>
@@ -137,18 +143,31 @@ function renderTrain() {
         ${r.slots.map((s) => {
           const id = slotExercise(s, state.settings.swaps);
           const ex = EXERCISES[id];
-          const sug = suggestFor(state.workouts, id, s.reps, p);
+          const sug = suggestFor(state.workouts, id, s.reps, p, planOpts(s));
           return `<li><img src="${imgUrl(id)}" alt="" loading="lazy">
-            <span>${esc(ex.name)}${ex.unilateral ? ' <small class="pill">1 pierna</small>' : ''}</span>
+            <span>${esc(ex.name)}${s.technique === '37' ? ' <small class="pill">3/7</small>' : ''}${ex.unilateral ? ' <small class="pill">1 pierna</small>' : ''}</span>
             <span class="muted">${sug.weight != null ? `${sug.weight} kg` : `${s.sets}×${s.reps[0]}–${s.reps[1]}`}</span></li>`;
         }).join('')}
       </ul>
       <button class="primary" id="start">Empezar ${r.name}</button>
       <button class="ghost" id="startOther">Hacer ${ROUTINES[key === 'A' ? 'B' : 'A'].name} en su lugar</button>
+      <button class="ghost" id="startC">Día C opcional (~35 min, solo prioridades)</button>
     </section>`;
   $('#start').onclick = () => start(key);
   $('#startOther').onclick = () => start(key === 'A' ? 'B' : 'A');
+  $('#startC').onclick = () => start('C');
   bindGo();
+}
+
+// Revisión pendiente: quincenal (peso) cada 14 días y mensual (cinta + prueba de piernas) cada 28.
+function reviewDue() {
+  if (state.workouts.length < 4) return null;
+  const last = lastReview();
+  const lastTape = [...state.measurements].reverse().find((m) => m.arm || m.waist || m.thigh);
+  const sinceTape = daysSince(lastTape?.date);
+  if (sinceTape == null || sinceTape >= REVIEW.tapeEveryDays) return 'mensual';
+  const since = daysSince(last?.date);
+  return since == null || since >= REVIEW.everyDays ? 'quincenal' : null;
 }
 
 function bindGo() {
@@ -158,7 +177,7 @@ function bindGo() {
 }
 
 function start(key) {
-  state.current = newWorkout(key, state.workouts, state.settings.swaps, profile());
+  state.current = newWorkout(key, state.workouts, state.settings.swaps, profile(), state.settings.planStart);
   keepAwake(true);
   save();
   render();
@@ -173,8 +192,11 @@ function renderWorkout() {
     ${w.entries.map((e, ei) => {
       const slot = slotOf(w, e.slot);
       const ex = EXERCISES[e.exercise];
-      const prev = lastEntry(state.workouts, e.exercise);
-      const sug = suggestFor(state.workouts, e.exercise, slot.reps, p);
+      const tech = e.technique || 'normal';
+      const is37 = tech === '37';
+      const prev = lastEntry(state.workouts, e.exercise, tech);
+      const sug = suggestFor(state.workouts, e.exercise, slot.reps, p, planOpts({ technique: tech }));
+      const ownLoad = ex.unilateral && p.healthyOwnLoad;
       const asym = prev && ex.unilateral ? asymmetry(prev.sets) : null;
       const ssLabel = slot.superset && slot.superset !== lastSuperset ? '<p class="tag">Superserie ↓ alterna estos dos</p>' : '';
       lastSuperset = slot.superset || null;
@@ -184,13 +206,16 @@ function renderWorkout() {
           <img src="${imgUrl(e.exercise)}" alt="" data-info="${e.exercise}" class="thumb">
           <div>
             <h3 data-info="${e.exercise}">${esc(ex.name)}</h3>
-            <p class="muted">${slot.sets} series${ex.unilateral ? ' por pierna' : ''} · ${slot.reps[0]}–${slot.reps[1]} reps · descanso ${Math.round(slot.rest / 60 * 10) / 10} min</p>
+            <p class="muted">${is37
+              ? `<b>Método 3/7</b> · ${slot.sets} bloques de 3-4-5-6-7 · 15 s entre mini-series · 2:30 entre bloques`
+              : `${slot.sets} series${ex.unilateral ? ' por pierna' : ''} · ${slot.reps[0]}–${slot.reps[1]} reps · descanso ${Math.round(slot.rest / 60 * 10) / 10} min`}</p>
           </div>
         </header>
         <div class="hint">
           ${prev ? `Última vez: <b>${setsText(prev.sets)}</b>${prev.pain != null ? ` · dolor ${prev.pain}/10` : ''}<br>` : ''}
           🎯 ${esc(sug.text)}
-          ${ex.unilateral ? `<br>🦵 Empieza por la ${p.injuredSide ? `${sideName(p.injuredSide)} (lesionada)` : 'pierna lesionada'}; la otra hace el mismo peso y reps, no más.` : ''}
+          ${ex.unilateral ? `<br>🦵 Empieza por la ${p.injuredSide ? `${sideName(p.injuredSide)} (lesionada)` : 'pierna lesionada'}; ${ownLoad ? 'la otra trabaja con su propio peso y esfuerzo (RIR 2).' : 'la otra hace el mismo peso y reps, no más.'}` : ''}
+          ${is37 ? '<br>⏱️ Sin soltar la máquina: el temporizador marca los 15 s y te avisa con el "¡Go!".' : ''}
           ${ex.assisted ? '<br>⚖️ El peso es la <b>asistencia</b>: cuanto menos, mejor.' : ''}
           ${asym && asym.pct >= 10 ? `<br><span class="warnText">⚠️ La última vez hubo un ${asym.pct}% de diferencia entre piernas${asym.weaker ? ` (más débil: ${sideName(asym.weaker)})` : ''}.</span>` : ''}
         </div>
@@ -198,12 +223,14 @@ function renderWorkout() {
           <div class="row head"><span>#</span><span>${ex.assisted ? 'ayuda kg' : 'kg'}</span><span>reps</span><span></span></div>
           ${e.sets.map((s, si) => {
             // En unilaterales, el segundo lado propone lo que hizo el primero.
-            const pair = ex.unilateral && si % 2 === 1 ? e.sets[si - 1] : null;
+            // (salvo que la pierna sana entrene con su propio peso).
+            const pair = ex.unilateral && si % 2 === 1 && !ownLoad ? e.sets[si - 1] : null;
             const phW = pair && pair.weight !== '' ? pair.weight : sug.weight ?? '';
-            const phR = pair && pair.reps !== '' ? pair.reps : sug.reps;
-            const n = ex.unilateral ? `${Math.floor(si / 2) + 1}<small>${SIDE_LABEL[s.side]}</small>` : si + 1;
+            const phR = is37 ? s.target : pair && pair.reps !== '' ? pair.reps : sug.reps;
+            const n = is37 ? `B${s.block}<small>${s.target} reps</small>`
+              : ex.unilateral ? `${Math.floor(si / 2) + 1}<small>${SIDE_LABEL[s.side]}</small>` : si + 1;
             return `
-            <div class="row ${s.done ? 'done' : ''} ${pair ? 'pair' : ''}">
+            <div class="row ${s.done ? 'done' : ''} ${pair ? 'pair' : ''} ${is37 && s.target === 7 && s.block < slot.sets ? 'blockEnd' : ''}">
               <span class="n">${n}</span>
               <input type="number" inputmode="decimal" step="0.5" min="0" value="${esc(s.weight)}" data-e="${ei}" data-s="${si}" data-f="weight" placeholder="${phW}">
               <input type="number" inputmode="numeric" min="0" value="${esc(s.reps)}" data-e="${ei}" data-s="${si}" data-f="reps" placeholder="${phR}">
@@ -211,7 +238,7 @@ function renderWorkout() {
             </div>`;
           }).join('')}
         </div>
-        <button class="link" data-add="${ei}">+ serie</button>
+        ${is37 ? '' : `<button class="link" data-add="${ei}">+ serie</button>`}
         ${'pain' in e ? `
         <div class="pain">
           <span>Dolor en la pierna (0–10)</span>
@@ -246,6 +273,13 @@ function renderWorkout() {
       const slot = slotOf(w, e.slot);
       const nextSlot = ROUTINES[w.routine].slots[Number(btn.dataset.e) + 1];
       const inSuperset = slot.superset && nextSlot?.superset === slot.superset;
+      if (e.technique === '37') {
+        // 3/7: 15 s entre mini-series; descanso largo al acabar cada bloque.
+        const lastOfBlock = s.target === LADDER[LADDER.length - 1];
+        if (s.done) startTimer(!lastOfBlock ? 15 : s.block < slot.sets ? slot.rest : 90);
+        renderWorkout();
+        return;
+      }
       // En unilaterales se descansa tras hacer las dos piernas.
       const firstSide = ex.unilateral && si % 2 === 0;
       if (s.done && !firstSide) startTimer(inSuperset ? 20 : slot.rest);
@@ -332,7 +366,7 @@ function startTimer(seconds) {
     el.innerHTML = `Descanso <b>${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</b> <button id="skip">Saltar</button>`;
     $('#skip').onclick = stopTimer;
     // Avisos: uno suave a los 10 s, cuenta atrás 3-2-1 y salida.
-    if (left !== lastCue && (left === 10 || (left <= 3 && left > 0))) {
+    if (left !== lastCue && ((left === 10 && seconds > 20) || (left <= 3 && left > 0))) {
       lastCue = left;
       cue(left === 10 ? 'warn' : 'count');
     }
@@ -501,28 +535,53 @@ function renderProgress() {
   const max = WEEKLY_TARGET.max;
   const bw = profile().bodyweight;
   const exIds = [...new Set(state.workouts.flatMap((w) => w.entries.map((e) => e.exercise)))];
-  const current = exIds.map((id) => {
-    const prev = lastEntry(state.workouts, id);
-    const slot = Object.values(ROUTINES).flatMap((r) => r.slots).find((s) => slotExercise(s, state.settings.swaps) === id);
-    const sug = slot ? suggestFor(state.workouts, id, slot.reps, profile()) : null;
-    return { id, prev, sug };
+  // Una fila por ejercicio y técnica de las rutinas actuales.
+  const seen = new Set();
+  const current = Object.values(ROUTINES).flatMap((r) => r.slots).filter((slot) => {
+    const k = `${slotExercise(slot, state.settings.swaps)}|${techOf(slot)}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).map((slot) => {
+    const id = slotExercise(slot, state.settings.swaps);
+    const tech = techOf(slot);
+    return {
+      id, tech,
+      prev: lastEntry(state.workouts, id, tech),
+      sug: suggestFor(state.workouts, id, slot.reps, profile(), planOpts(slot)),
+      trend: exerciseTrend(state.workouts, id, tech, bw),
+    };
   });
+  const trendLabel = { progresa: '▲ progresa', estancado: '■ estancado', retrocede: '▼ retrocede', nuevo: 'nuevo' };
+  const delta = reviewDelta(state.measurements, REVIEW.realChangeCm);
+  const lastM = lastReview();
+  const fieldName = { weight: 'Peso', waist: 'Cintura', arm: 'Brazo', thigh: 'Muslo', chest: 'Pecho' };
   const unilateral = exIds.filter((id) => EXERCISES[id].unilateral)
     .map((id) => ({ id, a: asymmetry(lastEntry(state.workouts, id)?.sets) }))
     .filter((x) => x.a);
   main.innerHTML = `
     <h2>Progreso</h2>
-    ${current.length ? `
+    <section class="card ${reviewDue() ? 'notice' : ''}">
+      <h3>Seguimiento</h3>
+      <p class="muted">${lastM ? `Última revisión hace ${daysSince(lastM.date)} días.` : 'Aún no hay revisiones.'}
+        Cada 2 semanas: peso. Cada mes: cinta métrica, fotos y prueba de piernas.</p>
+      ${delta ? `<ul class="results">${Object.entries(delta.fields).map(([k, f]) => `
+        <li><span>${fieldName[k]}</span><span class="${f.real ? (f.delta > 0 ? 'up' : 'down') : 'muted'}">${f.delta > 0 ? '+' : ''}${f.delta} ${k === 'weight' ? 'kg' : 'cm'}${k !== 'weight' && !f.real ? ' (ruido)' : ''}</span></li>`).join('')}
+        <li><span>En ${delta.days} días</span><span class="muted">objetivo peso: +${REVIEW.weightGainPer2Weeks[0]}–${REVIEW.weightGainPer2Weeks[1]} kg cada 2 semanas</span></li></ul>` : ''}
+      ${lastM?.symL && lastM?.symR ? `<p>Simetría piernas (prensa): <b>${Math.round((lastM.symL / lastM.symR) * 100)} %</b> ${lastM.symL / lastM.symR >= 0.9 ? '✓' : '(objetivo ≥90 %)'}</p>` : ''}
+      <button class="primary" id="review">Registrar revisión</button>
+    </section>
+    ${current.some((c) => c.prev) ? `
     <section class="card">
       <h3>Tus pesos</h3>
       <p class="muted">Lo último que hiciste y lo que toca la próxima vez.</p>
       <table class="weights">
         <thead><tr><th>Ejercicio</th><th>Última vez</th><th>Próxima</th></tr></thead>
-        <tbody>${current.map(({ id, prev, sug }) => `
+        <tbody>${current.map(({ id, tech, prev, sug, trend }) => `
           <tr data-info="${id}">
-            <td>${esc(EXERCISES[id].name)}</td>
-            <td>${setsText(prev.sets)}</td>
-            <td><b>${sug?.weight != null ? `${sug.weight} kg × ${sug.reps}` : '—'}</b></td>
+            <td>${esc(EXERCISES[id].name)}${tech === '37' ? ' <small class="pill">3/7</small>' : ''}<br><small class="trend-${trend.status}">${trendLabel[trend.status]}</small></td>
+            <td>${prev ? setsText(prev.sets) : '—'}</td>
+            <td><b>${sug?.weight != null ? `${sug.weight} kg${tech === '37' ? '' : ` × ${sug.reps}`}` : '—'}</b></td>
           </tr>`).join('')}</tbody>
       </table>
     </section>` : ''}
@@ -547,7 +606,9 @@ function renderProgress() {
     <section class="card">
       <h3>Fuerza (1RM estimado)</h3>
       ${exIds.map((id) => {
-        const points = state.workouts.map((w) => w.entries.find((e) => e.exercise === id)).filter(Boolean).map((e) => bestE1rm(e.sets, EXERCISES[id], bw));
+        // Solo series normales: el 1RM estimado de las mini-series del 3/7 no es comparable.
+        const points = state.workouts.map((w) => w.entries.find((e) => e.exercise === id && (e.technique || 'normal') === 'normal')).filter(Boolean).map((e) => bestE1rm(e.sets, EXERCISES[id], bw));
+        if (!points.length) return '';
         return `<div class="trend" data-info="${id}"><span>${esc(EXERCISES[id].name)}</span>${spark(points)}<b>${Math.round(points[points.length - 1])} kg</b></div>`;
       }).join('')}
     </section>` : ''}
@@ -558,6 +619,48 @@ function renderProgress() {
         : '<p class="muted">Aún no hay entrenos. ¡El primero es el más importante!</p>'}
     </section>`;
   main.querySelectorAll('[data-info]').forEach((el) => { el.onclick = () => openExercise(el.dataset.info); });
+  $('#review').onclick = openReview;
+}
+
+// Revisión quincenal/mensual: peso (media de la semana), cinta métrica y prueba de simetría de piernas.
+function openReview() {
+  const monthly = reviewDue() === 'mensual';
+  const f = (id, label, hint = '') => `<label class="field" for="${id}">${label}${hint ? ` <small class="muted">${hint}</small>` : ''}</label>
+    <input id="${id}" class="text" type="number" inputmode="decimal" step="0.1" min="0">`;
+  openModal(`
+    <h2>Revisión ${monthly ? 'mensual' : 'quincenal'}</h2>
+    <p class="muted">Mídete por la mañana, en ayunas y antes de entrenar. Deja en blanco lo que no midas hoy.</p>
+    ${f('mWeight', 'Peso (kg)', 'media de los últimos 7 días si la tienes')}
+    <details ${monthly ? 'open' : ''}><summary>Cinta métrica (mensual)</summary>
+      ${f('mWaist', 'Cintura (cm)', 'a la altura del ombligo, al final de soltar el aire')}
+      ${f('mArm', 'Brazo relajado (cm)', 'punto medio hombro–codo, siempre el mismo lado')}
+      ${f('mThigh', 'Muslo (cm)', 'a la misma distancia sobre la rótula')}
+      ${f('mChest', 'Pecho (cm)')}
+    </details>
+    <details ${monthly ? 'open' : ''}><summary>Prueba de piernas (mensual)</summary>
+      <p class="muted small">Prensa unilateral con 35 kg: todas las reps que puedas dejando 1 en reserva. Empieza por la izquierda. Para solo si el dolor pasa de 3/10.</p>
+      ${f('mSymL', 'Reps pierna izquierda')}
+      ${f('mSymR', 'Reps pierna derecha')}
+    </details>
+    <label class="field" for="mNote">Nota (sueño, ganas, molestias)</label>
+    <input id="mNote" class="text" type="text">
+    <button class="primary" id="mSave">Guardar revisión</button>
+    <button class="ghost" data-close>Cancelar</button>`);
+  $('#mSave').onclick = () => {
+    const num = (id) => { const v = $(`#${id}`).value; return v === '' ? null : Number(v); };
+    const m = {
+      date: new Date().toISOString(),
+      weight: num('mWeight'), waist: num('mWaist'), arm: num('mArm'), thigh: num('mThigh'), chest: num('mChest'),
+      symL: num('mSymL'), symR: num('mSymR'), note: $('#mNote').value.trim(),
+    };
+    if (Object.entries(m).every(([k, v]) => k === 'date' || v == null || v === '')) { toast('Apunta al menos un dato'); return; }
+    state.measurements.push(m);
+    if (m.weight) profile().bodyweight = m.weight;
+    save();
+    closeModal();
+    toast('Revisión guardada');
+    render();
+  };
 }
 
 function spark(points) {
@@ -584,6 +687,8 @@ function renderSettings() {
       <input id="bw" class="text" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(p.bodyweight)}" placeholder="p. ej. 78">
       <label class="toggle"><input type="checkbox" id="recovery" ${p.recovery ? 'checked' : ''}>
         <span><b>Modo recuperación en piernas</b><br><small class="muted">Saltos de peso a la mitad, empieza ligero, y si marcas dolor &gt; ${PAIN_LIMIT}/10 te baja la carga la próxima vez.</small></span></label>
+      <label class="toggle"><input type="checkbox" id="ownLoad" ${p.healthyOwnLoad ? 'checked' : ''}>
+        <span><b>Pierna sana a su propio esfuerzo</b><br><small class="muted">Fase 1 de salida del modo recuperación, con el visto bueno de tu médico o fisio: la pierna sana deja de copiar a la lesionada y progresa con su propio peso (RIR 2).</small></span></label>
       <label class="field" for="notes">Notas</label>
       <textarea id="notes" rows="9">${esc(p.notes)}</textarea>
       <p class="muted small" id="saved"></p>
@@ -636,6 +741,7 @@ function renderSettings() {
   });
   $('#bw').onchange = (ev) => { p.bodyweight = ev.target.value === '' ? null : Number(ev.target.value); save(); };
   $('#recovery').onchange = (ev) => { p.recovery = ev.target.checked; save(); };
+  $('#ownLoad').onchange = (ev) => { p.healthyOwnLoad = ev.target.checked; save(); };
   $('#notes').oninput = (ev) => {
     p.notes = ev.target.value;
     save();
