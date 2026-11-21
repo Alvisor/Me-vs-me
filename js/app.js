@@ -4,6 +4,9 @@ import {
   asymmetry, slotExercise, formatSets, mergeStates, exerciseTrend, reviewDelta, daysSince, LADDER, SIDE_LABEL,
 } from './logic.js';
 
+// Se muestra en Ajustes para comprobar que el móvil tiene la última versión.
+const APP_VERSION = 'Plan v2 · 21 nov 2026';
+
 // ---------- Estado persistente ----------
 const KEY = 'mevsme.v1';
 const defaults = () => ({ settings: { daysPerWeek: 2, swaps: {}, sound: { beeps: true, voice: true, awake: true }, profile: { ...DEFAULT_PROFILE } }, workouts: [], measurements: [], current: null });
@@ -735,6 +738,7 @@ function renderSettings() {
       <label class="ghost file">Importar copia<input type="file" accept="application/json" id="import" hidden></label>
       <button class="ghost danger" id="reset">Borrar todo</button>
     </section>
+    <p class="muted small">Versión ${APP_VERSION}</p>
     <p class="muted small">Imágenes: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (dominio público).</p>`;
   main.querySelectorAll('[data-side]').forEach((b) => {
     b.onclick = () => { p.injuredSide = b.dataset.side; save(); render(); };
@@ -879,7 +883,15 @@ document.querySelectorAll('nav button').forEach((b) => {
 });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Cuando se instala una versión nueva, recarga una vez para mostrarla (los datos no se tocan).
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
 }
 
 render();
