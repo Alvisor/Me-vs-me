@@ -1,1 +1,7 @@
 entrega/
+__pycache__/
+*.pyc
+sim/
+dist/
+build/
+*.spec
