@@ -1,0 +1,17 @@
+generar_rutas 2.0  -  2026-11-23 21:29:24
+Entrada ............................ /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/rutas_destino_prueba.csv
+Filas leidas ....................... 25
+Filas en el archivo de rutas ....... 21   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion.csv
+Filas excluidas .................... 4   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion_excluidas.csv
+    DUPLICADO_EXACTO             1
+    RUTA_ORIGEN_INVALIDA         1
+    SIN_CASO                     1
+    SIN_CODIGO_ESTUDIANTE        1
+Destinos repetidos (grupos) ........ 4
+Archivos renombrados con _# ........ 5   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion_renombrados.csv
+Sufijo maximo usado ................ _2
+Nombres con caracteres corregidos .. 4
+Largo maximo destino relativo ...... 58   (aviso: 0 sobre 200)
+Filas cuyo RutaDestino original difiere del calculado: 0
+VERIFICACION destinos unicos (insensible a mayusculas): OK
+Duracion: 0.0 s

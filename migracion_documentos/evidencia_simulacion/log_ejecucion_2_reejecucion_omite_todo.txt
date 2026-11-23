@@ -1,0 +1,18 @@
+copiar_archivos 2.0  |  EJECUCION
+Inicio ............ 2026-11-23 21:29:52
+Equipo/usuario .... vm / root  (Linux 6.18.44-fc-v726, Python 3.13.18)
+Archivo de rutas .. /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/rutas_viejas.csv  (1 filas; se procesaran 1)
+Origen base ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/origen
+Destino base ...... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/destino_f
+Verificar hash .... False   |   corte por errores seguidos: 25
+----------------------------------------------------------------------------------------------------
+[21:29:52] fila       2  COPIADO                  777/CASO-1/ESTUDIANTE/DOC02.pdf
+  progreso 1/1 (100.0%)  5,726 filas/s  errores=0  faltan ~00:00:00
+----------------------------------------------------------------------------------------------------
+RESUMEN  (COMPLETO)
+   COPIADO                            1
+   filas procesadas                   1 de 1
+   Bytes copiados ........... 0.0 MB
+   Duracion ................. 00:00:00  (1,816 filas/s)
+   Log ...................... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/logs/log_ejecucion_20261123_212952.txt
+   Resultado por fila ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/logs/resultado_ejecucion_20261123_212952.csv

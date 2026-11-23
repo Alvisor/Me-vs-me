@@ -1,0 +1,5 @@
+﻿FilaEntrada,Motivo,Origen,NombreArchivo,Detalle
+11,DUPLICADO_EXACTO,10013/4/401/10055/Cancelación Curso.pdf,Cancelación Curso.pdf,igual a la fila 10
+24,SIN_CASO,10013/11/1101/10055/,SinCaso.pdf,
+25,SIN_CODIGO_ESTUDIANTE,10013/11/1102/10055/,SinCodigo.pdf,
+26,RUTA_ORIGEN_INVALIDA,../../etc/,passwd,ruta absoluta o con ..
