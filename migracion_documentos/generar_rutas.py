@@ -98,8 +98,8 @@ def limpiar_componente(s):
     """Quita lo que Windows no admite en un nombre. Devuelve (texto, cambio?)"""
     original = s
     s = unicodedata.normalize("NFC", str(s))
-    s = "".join("_" if (c in ILEGALES or ord(c) < 32) else c for c in s)
-    s = s.strip(" .")                       # Windows no admite espacio/punto final
+    s = "".join("_" if (c in ILEGALES or ord(c) < 32 or c == "\ufffd") else c for c in s)
+    s = s.rstrip(" .")                      # Windows no admite espacio/punto FINAL (el punto inicial si: ".pdf")
     if not s:
         s = "_"
     stem = s.split(".")[0].upper()
@@ -110,6 +110,8 @@ def limpiar_componente(s):
 
 def dividir_ext(nombre):
     stem, ext = os.path.splitext(nombre)
+    if not ext and nombre.startswith(".") and nombre.count(".") == 1:
+        return "", nombre                   # ".pdf" -> el sufijo va antes: "_1.pdf" (no ".pdf_1")
     return stem, ext
 
 
@@ -123,6 +125,11 @@ def main(argv=None):
                     help="avisar cuantos destinos relativos superan este largo (por defecto 200)")
     ap.add_argument("--version", action="version", version=VERSION)
     a = ap.parse_args(argv)
+    for flujo in (sys.stdout, sys.stderr):      # la consola de Windows (cp1252/cp437) no puede mostrar todos los nombres:
+        try:                                    # sin esto un print() con un caracter raro tumbaria la corrida a la mitad
+            flujo.reconfigure(errors="replace")
+        except Exception:                       # noqa: BLE001
+            pass
 
     t0 = datetime.now()
     carpeta_salida = os.path.dirname(os.path.abspath(a.salida))
@@ -199,7 +206,7 @@ def main(argv=None):
             continue
         vistos_exactos[kex] = n
         validas.append(dict(fila=n, origen=origen, dir=dest_dir, nombre=nom, original=nombre,
-                            caso=c2, codigo=c1, tipo=c3, cambio=(k1 or k2 or k3 or k4),
+                            limpio=nom, caso=c2, codigo=c1, tipo=c3, cambio=(k1 or k2 or k3 or k4),
                             rd=get(fila, "rutadestino"), sufijo=""))
 
     # ------------------------------------------------- 2. repetidos -> _1, _2
@@ -272,8 +279,10 @@ def main(argv=None):
     largos = [len(r["dir"]) + 1 + len(r["nombre"]) for r in validas]
     largo_max = max(largos) if largos else 0
     sobre = sum(1 for x in largos if x > a.largo_aviso)
+    # RutaDestino que traia la consulta vs. el calculado (antes de agregar _#, ya con caracteres corregidos)
     difieren = [r for r in validas if r["rd"] and
-                clave("/".join(partes(r["rd"]))) != clave(r["dir"] + "/" + r["original"])]
+                clave("/".join(partes(r["rd"]))) != clave(r["dir"] + "/" + r["limpio"])]
+    con_ffffd = sum(1 for r in validas if "�" in r["origen"])
     grupos_dup = sum(1 for l in grupos.values() if len(l) > 1)
     lineas = [
         f"generar_rutas {VERSION}  -  {t0:%Y-%m-%d %H:%M:%S}",
@@ -290,7 +299,9 @@ def main(argv=None):
         f"Filas cuyo RutaDestino original difiere del calculado: {len(difieren)}",
     ]
     for r in difieren[:10]:
-        lineas.append(f"    fila {r['fila']}: entrada='{r['rd']}'  calculado='{r['dir']}/{r['original']}'")
+        lineas.append(f"    fila {r['fila']}: entrada='{r['rd']!r}'  calculado='{r['dir']}/{r['limpio']}'")
+    lineas.append(f"Nombres de ORIGEN con caracter danado (U+FFFD, probable error de codificacion en la consulta): {con_ffffd}"
+                  + ("   <- el robot busca en la carpeta UN archivo que calce; si no hay uno unico, los reporta como ERROR_ORIGEN_NO_EXISTE" if con_ffffd else ""))
     lineas.append(f"VERIFICACION destinos unicos (insensible a mayusculas): {'OK' if ok else 'FALLO'}")
     lineas.append(f"Duracion: {(datetime.now() - t0).total_seconds():.1f} s")
     texto = "\n".join(lineas)

@@ -28,6 +28,7 @@ import hashlib
 import io
 import os
 import platform
+import re
 import shutil
 import socket
 import sys
@@ -48,7 +49,6 @@ ERRORES_ES = {"ERROR_COPIA", "ERROR_CARPETA"}      # los que cuentan para el cor
 
 # ---------------------------------------------------------------- utilidades
 def squeeze(s):
-    import re
     return re.sub(r"[\s_\-]+", "", unicodedata.normalize("NFC", str(s)).strip().lower())
 
 
@@ -170,13 +170,32 @@ def destinos_repetidos(filas):
     return repetidos
 
 
+def resolver_origen(O):
+    """La consulta trae algunos nombres con el caracter danado U+FFFD (error de codificacion: 'innovaci\ufffdn').
+    Si el archivo no existe tal cual, busca en SU carpeta un unico archivo que calce con el patron.
+    Si hay 0 o mas de 1 candidato no adivina: devuelve None."""
+    nombre = os.path.basename(O)
+    if "\ufffd" not in nombre:
+        return None
+    patron = re.compile("".join(".{1,2}" if c == "\ufffd" else re.escape(c) for c in nombre), re.S)
+    try:
+        cands = [n for n in os.listdir(os.path.dirname(O)) if patron.fullmatch(n)]
+    except OSError:
+        return None
+    return os.path.join(os.path.dirname(O), cands[0]) if len(cands) == 1 else None
+
+
 # ---------------------------------------------------------------- una fila
 def copiar_fila(f, ob, db, verificar_hash, simular):
     O = ruta_os(os.path.join(ob, *f["o"]))
     D = ruta_os(os.path.join(db, *f["d"]))
+    nota = ""
     try:
         if not os.path.isfile(O):
-            return "ERROR_ORIGEN_NO_EXISTE", "no existe el archivo de origen", 0, ""
+            alt = resolver_origen(O)
+            if not alt:
+                return "ERROR_ORIGEN_NO_EXISTE", "no existe el archivo de origen", 0, ""
+            O, nota = alt, "origen resuelto por patron: " + os.path.basename(alt)
         tam = os.path.getsize(O)
     except OSError as e:
         return "ERROR_ORIGEN_ILEGIBLE", f"{type(e).__name__}: {e}", 0, ""
@@ -194,10 +213,10 @@ def copiar_fila(f, ob, db, verificar_hash, simular):
                     f"ya existe con otro tamano (destino {tam_d} vs origen {tam}); no se sobrescribe", tam, "")
         if verificar_hash and sha256(O) != sha256(D):
             return "ERROR_CONFLICTO_DESTINO", "mismo tamano pero contenido distinto; no se sobrescribe", tam, ""
-        return ("SIMULADO_YA_EXISTE" if simular else "OMITIDO_YA_EXISTE"), "mismo tamano", tam, ""
+        return ("SIMULADO_YA_EXISTE" if simular else "OMITIDO_YA_EXISTE"), "mismo tamano" + ("; " + nota if nota else ""), tam, ""
 
     if simular:
-        return "SIMULADO_COPIAR", "", tam, ""
+        return "SIMULADO_COPIAR", nota, tam, ""
 
     carpeta = os.path.dirname(D)
     try:
@@ -223,7 +242,7 @@ def copiar_fila(f, ob, db, verificar_hash, simular):
                 return "ERROR_COPIA", "hash distinto tras copiar; se descarto", tam, ""
         os.replace(tmp, D)
         terminado = True
-        return "COPIADO", "", tam, h
+        return "COPIADO", nota, tam, h
     except Exception as e:                                   # noqa: BLE001  (se registra y se sigue)
         return "ERROR_COPIA", f"{type(e).__name__}: {e}", tam, ""
     finally:
@@ -250,11 +269,16 @@ def main(argv=None):
                     help="abortar tras N errores de copia/carpeta seguidos (disco lleno, red caida...)")
     ap.add_argument("--version", action="version", version=VERSION)
     a = ap.parse_args(argv)
+    for flujo in (sys.stdout, sys.stderr):      # la consola de Windows (cp1252/cp437) no puede mostrar todos los nombres:
+        try:                                    # sin esto un print() con un caracter raro tumbaria la corrida a la mitad
+            flujo.reconfigure(errors="replace")
+        except Exception:                       # noqa: BLE001
+            pass
 
     ob, db = os.path.abspath(a.origen_base), os.path.abspath(a.destino_base)
-    if not os.path.isdir(ob):
+    if not os.path.isdir(ruta_os(ob)):
         print(f"ERROR: no existe la carpeta de origen: {ob}"); return 2
-    if not os.path.isdir(db):
+    if not os.path.isdir(ruta_os(db)):
         print(f"ERROR: no existe la carpeta de destino: {db}\n       (se exige que exista para evitar copiar a una ruta mal escrita)"); return 2
     if clave(ob) == clave(db):
         print("ERROR: origen y destino son la misma carpeta"); return 2
@@ -347,7 +371,10 @@ def main(argv=None):
         log(f"   {k:<26} {cont[k]:>9}", True)
     log(f"   {'filas procesadas':<26} {hechas:>9} de {total}", True)
     if a.simular:
-        libre = shutil.disk_usage(db).free
+        try:
+            libre = shutil.disk_usage(db).free
+        except OSError:
+            libre = float('inf')
         log(f"   Espacio a copiar ......... {bytes_a_copiar / 1e6:,.1f} MB   |   libre en destino: {libre / 1e6:,.1f} MB"
             + ("   <-- NO ALCANZA" if bytes_a_copiar > libre else ""), True)
     else:

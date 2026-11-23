@@ -17,21 +17,29 @@ import unicodedata
 COLS = ["Ruta", "NombreArchivo", "RutaDestino", "Caso", "SCODIGO", "TipoDocumento", "idEntidad", "idRegistro", "idAtributo"]
 
 
+def P(p):
+    """Windows: prefijo \\\\?\\ para rutas de mas de 260 caracteres (en Linux no hace nada)."""
+    if os.name == "nt":
+        p = os.path.abspath(p)
+        return p if p.startswith("\\\\?\\") else "\\\\?\\" + p
+    return p
+
+
 def contenido(clave, tam):
     """Bytes deterministas y distintos por archivo (para que el hash sirva de verdad)."""
     semilla = hashlib.sha256(clave.encode()).digest()
     return (semilla * (tam // 32 + 1))[:tam]
 
 
-def crear(carpeta, masivo):
+def crear(carpeta, masivo, largo=False):
     origen = os.path.join(carpeta, "origen")
     filas = []
 
     def archivo(ruta, nombre, tam=1500, crear_archivo=True):
         d = os.path.join(origen, *ruta.strip("/").split("/"))
         if crear_archivo:
-            os.makedirs(d, exist_ok=True)
-            with open(os.path.join(d, nombre), "wb") as f:
+            os.makedirs(P(d), exist_ok=True)
+            with open(P(os.path.join(d, nombre)), "wb") as f:
                 f.write(contenido(ruta + nombre, tam))
 
     def fila(ruta, nombre, codigo, caso, tipo, **kw):
@@ -53,13 +61,29 @@ def crear(carpeta, masivo):
     filas.append(list(filas[-1]))
     # 5) origen que NO existe en disco -> ERROR_ORIGEN_NO_EXISTE y el proceso continua
     fila("10013/5/501/10055/", "Fantasma.pdf", "900000005", "HOM2020-1-5", "USoporte", crear_archivo=False)
+    # 5b) origen inexistente con caracteres que la consola de Windows no puede mostrar (cp1252/cp437)
+    fila("10013/5/502/10055/", "Fantasma \u2603 \u65e5\u672c.pdf", "900000005", "HOM2020-1-5", "USoporte", crear_archivo=False)
     # 6) caracteres que Windows no admite en el nombre de destino
-    fila("10013/6/601/10055/", "Acta: final?.pdf", "900000006", "HOM2020-1-6", "USoporte")
+    #    (en Windows el sistema de archivos no permite CREAR esos origenes: se usan equivalentes validos)
+    win = os.name == "nt"
+    fila("10013/6/601/10055/", "Acta final.pdf" if win else "Acta: final?.pdf", "900000006", "HOM2020-1-6", "USoporte")
     # 7) puntos/espacios raros y nombre reservado de Windows
     fila("10013/7/701/10055/", "Salazar V..pdf", "900000007", "HOM2020-1-7", "UCertificadoNotas")
     fila("10013/7/702/10055/", "notas .pdf", "900000007", "HOM2020-1-7", "UCertificadoNotas")
-    fila("10013/7/703/10055/", "informe.", "900000007", "HOM2020-1-7", "UCertificadoNotas")
-    fila("10013/7/704/10055/", "CON.pdf", "900000007", "HOM2020-1-7", "UCertificadoNotas")
+    if not win:     # Windows no deja crear "informe." (quita el punto) ni "CON.pdf" (nombre reservado)
+        fila("10013/7/703/10055/", "informe.", "900000007", "HOM2020-1-7", "UCertificadoNotas")
+        fila("10013/7/704/10055/", "CON.pdf", "900000007", "HOM2020-1-7", "UCertificadoNotas")
+    # 7b) nombres que EMPIEZAN con punto (aparecen en la consulta real): no se les debe quitar el punto
+    fila("10013/7/705/10055/", ".pdf", "900000007", "HOM2020-1-7", "UPrograma")
+    fila("10013/7/706/10055/", ".pdf", "900000007", "HOM2020-1-7", "UPrograma")          # repetido -> _1.pdf
+    fila("10013/7/707/10055/", "._Solicitud homologación.pdf", "900000007", "HOM2020-1-7", "UPrograma")
+    # 7c) nombre con caracter danado U+FFFD en la consulta; en disco el archivo real tiene la tilde
+    archivo("10013/7/708/10055/", "Innovación 2016.pdf")
+    filas.append(["10013/7/708/10055/", "Innovaci\ufffdn 2016.pdf", "900000007/HOM2020-1-7/UPrograma/Innovaci_n 2016.pdf",
+                  "HOM2020-1-7", "900000007", "UPrograma", "10013", "708", "10055"])
+    # 7d) ruta larga (opcional, --largo): el destino completo pasa de 260 caracteres
+    if largo:
+        fila("10013/7/709/10055/", "L" * 200 + ".pdf", "900000007", "HOM2020-1-7", "UBibliografia")
     # 8) acentos: mismo nombre en NFC y NFD en el mismo destino (cuentan como repetido)
     nfc = unicodedata.normalize("NFC", "Homologación.pdf")
     nfd = unicodedata.normalize("NFD", "Homologación.pdf")
@@ -91,8 +115,7 @@ def crear(carpeta, masivo):
         w = csv.writer(f)
         w.writerow(COLS)
         w.writerows(filas)
-    for d in ("destino",):
-        os.makedirs(os.path.join(carpeta, d), exist_ok=True)
+    os.makedirs(os.path.join(carpeta, "destino"), exist_ok=True)
     print(f"Escenario creado en {carpeta}: {len(filas)} filas de consulta, origen en {origen}")
 
 
@@ -110,8 +133,12 @@ def verificar(carpeta, rutas, destino):
         filas = list(csv.DictReader(f))
     errores, esperados = [], set()
     for r in filas:
-        o = os.path.join(origen, *r["Origen"].split("/"))
-        d = os.path.join(destino, *r["Destino"].strip("/").split("/"), r["NombreArchivo"])
+        o = P(os.path.join(origen, *r["Origen"].split("/")))
+        d = P(os.path.join(destino, *r["Destino"].strip("/").split("/"), r["NombreArchivo"]))
+        if "\ufffd" in r["Origen"]:                     # el origen real tiene la tilde: lo resuelve el robot
+            carpeta_o = os.path.dirname(o)
+            cands = [n for n in os.listdir(carpeta_o) if n.startswith("Innovaci")]
+            o = os.path.join(carpeta_o, cands[0]) if cands else o
         if os.path.isfile(o):
             esperados.add(d)
             if not os.path.isfile(d):
@@ -121,7 +148,7 @@ def verificar(carpeta, rutas, destino):
         elif os.path.exists(d):
             errores.append(f"destino existe aunque el origen no: {d}")
     reales, partes = set(), []
-    for raiz, _, nombres in os.walk(destino):
+    for raiz, _, nombres in os.walk(P(destino)):
         for n in nombres:
             p = os.path.join(raiz, n)
             reales.add(p)
@@ -145,10 +172,10 @@ def verificar(carpeta, rutas, destino):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("crear"); c.add_argument("--carpeta", required=True); c.add_argument("--masivo", type=int, default=0)
+    c = sub.add_parser("crear"); c.add_argument("--carpeta", required=True); c.add_argument("--masivo", type=int, default=0); c.add_argument("--largo", action="store_true")
     v = sub.add_parser("verificar"); v.add_argument("--carpeta", required=True); v.add_argument("--rutas", required=True); v.add_argument("--destino", required=True)
     a = ap.parse_args()
     if a.cmd == "crear":
-        crear(a.carpeta, a.masivo)
+        crear(a.carpeta, a.masivo, a.largo)
     else:
         sys.exit(verificar(a.carpeta, a.rutas, a.destino))

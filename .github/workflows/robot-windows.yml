@@ -1,0 +1,80 @@
+name: Robot de migración (Windows .exe)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/friendly-hopper-ecthfj]
+    paths:
+      - 'migracion_documentos/**'
+      - '.github/workflows/robot-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compilar-y-probar:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: migracion_documentos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install pyinstaller openpyxl
+
+      - name: Compilar los ejecutables
+        run: |
+          pyinstaller --onefile --name CopiarArchivos copiar_archivos.py
+          pyinstaller --onefile --name GenerarRutas generar_rutas.py
+          ls -la dist
+
+      - name: Escenario sintético (incluye nombres con caracteres raros y ruta de más de 260 caracteres)
+        run: python escenario_prueba.py crear --carpeta sim --largo
+
+      - name: GenerarRutas.exe (CSV y XLSX)
+        run: ./dist/GenerarRutas.exe --entrada sim/rutas_destino_prueba.csv --salida sim/Rutas_migracion.csv --xlsx
+
+      - name: CopiarArchivos.exe --simular (no debe escribir nada)
+        run: |
+          ./dist/CopiarArchivos.exe --rutas sim/Rutas_migracion.csv --origen-base sim/origen --destino-base sim/destino --salida sim/logs --simular || [ $? -eq 1 ]
+          test "$(find sim/destino -type f | wc -l)" -eq 0
+
+      - name: CopiarArchivos.exe copia real leyendo el XLSX, con hash
+        run: ./dist/CopiarArchivos.exe --rutas sim/Rutas_migracion.xlsx --origen-base sim/origen --destino-base sim/destino --salida sim/logs --verificar-hash || [ $? -eq 1 ]
+
+      - name: Verificación independiente (hash de cada destino contra su origen)
+        run: python escenario_prueba.py verificar --carpeta sim --rutas sim/Rutas_migracion.csv --destino sim/destino
+
+      - name: Re-ejecución (debe omitir todo y no copiar nada)
+        run: |
+          ./dist/CopiarArchivos.exe --rutas sim/Rutas_migracion.csv --origen-base sim/origen --destino-base sim/destino --salida sim/logs | tee sim/reejecucion.txt || [ $? -eq 1 ]
+          if grep -E "^ +COPIADO " sim/reejecucion.txt; then echo "La re-ejecución copió archivos: no es idempotente"; exit 1; fi
+          grep -E "^ +OMITIDO_YA_EXISTE " sim/reejecucion.txt
+
+      - name: Destinos repetidos puestos a mano (debe abortar con código 2 sin copiar)
+        run: |
+          python -c "
+          import csv
+          r=list(csv.reader(open('sim/Rutas_migracion.csv',encoding='utf-8-sig')))
+          r.append(r[1][:])
+          csv.writer(open('sim/rutas_repetidas.csv','w',newline='',encoding='utf-8-sig')).writerows(r)"
+          mkdir sim/destino_b
+          ./dist/CopiarArchivos.exe --rutas sim/rutas_repetidas.csv --origen-base sim/origen --destino-base sim/destino_b --salida sim/logs && exit 1 || [ $? -eq 2 ]
+          test "$(find sim/destino_b -type f | wc -l)" -eq 0
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-migracion-windows
+          path: |
+            migracion_documentos/dist/CopiarArchivos.exe
+            migracion_documentos/dist/GenerarRutas.exe
+            migracion_documentos/sim/logs
+            migracion_documentos/sim/Rutas_migracion_reporte.txt
+          if-no-files-found: warn
