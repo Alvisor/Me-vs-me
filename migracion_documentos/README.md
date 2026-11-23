@@ -69,9 +69,23 @@ Códigos de salida: `0` todo bien · `1` terminó con errores en algunas filas �
 
 En octubre de 2023 el paralelismo produjo errores `Cannot create a file when that file already exists` y pérdidas de archivos por condiciones de carrera. Esta versión no usa hilos: cada fila se procesa completa antes de la siguiente, no hay bucles que dependan de datos externos (el único bucle de sufijos tiene tope de 100.000 intentos) y el orden del log es el orden de ejecución.
 
+## Ejecutables de Windows (`CopiarArchivos.exe`, `GenerarRutas.exe`)
+
+No necesitan Python instalado. Se compilan solos en GitHub Actions (`.github/workflows/robot-windows.yml`) cada vez que cambia esta carpeta. En la misma ejecución se corre el escenario completo **con esos .exe en un Windows real** (generar rutas, simular, copiar leyendo el XLSX con hash, verificar, re-ejecutar, destinos repetidos, ruta de más de 260 caracteres, nombres con caracteres que la consola no puede mostrar).
+
+Para bajarlos: pestaña **Actions** del repositorio → ejecución más reciente en verde → sección **Artifacts** → `robot-migracion-windows` (los .exe más los logs de esa prueba). Se usan igual que los scripts:
+
+```bash
+GenerarRutas.exe --entrada rutas_destino.xlsx --salida C:\migracion\Rutas_migracion.csv --xlsx
+CopiarArchivos.exe --rutas C:\migracion\Rutas_migracion.csv --origen-base D:\bizagi-nas --destino-base E:\homologaciones --simular
+```
+
+## Nombres con caracter dañado (U+FFFD)
+
+Algunos nombres de la consulta traen el carácter `�` (error de codificación al exportar). El destino los escribe con `_` (igual que `RutaDestino` en la consulta). Para el origen, si el archivo no existe tal cual, el robot busca **en esa misma carpeta un único archivo** que calce con el patrón (`�` = 1 o 2 caracteres); si hay 0 o más de 1 candidato no adivina y lo reporta como `ERROR_ORIGEN_NO_EXISTE`. Queda anotado en el detalle del resultado: `origen resuelto por patron`.
+
 ## Lo que NO está probado
 
-- **Windows**: las pruebas se hicieron en Linux. El prefijo `\\?\` para rutas de más de 260 caracteres y el comportamiento de nombres inválidos están implementados pero sin probar en Windows.
 - **Carpetas de red** (NAS): la velocidad real será mucho menor que la medida en disco local.
-- **Datos reales**: la consulta real completa (`rutas_destino`, 137.653 filas) no se pudo descargar desde Drive; hay que ejecutar el generador sobre ella.
-- **Ejecutable**: no se compiló. Con PyInstaller sería `pyinstaller --onefile copiar_archivos.py`.
+- **Archivos reales**: la corrida con la consulta real (134.941 filas) se hizo contra un origen falso con la misma estructura (archivos pequeños con contenido único). Falta la simulación contra el origen real.
+- **Windows con rutas de red UNC** (`\\servidor\carpeta`): el prefijo largo para UNC está implementado pero no se probó.
