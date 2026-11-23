@@ -1,17 +1,21 @@
-generar_rutas 2.0  -  2026-11-23 21:29:24
-Entrada ............................ /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/rutas_destino_prueba.csv
-Filas leidas ....................... 25
-Filas en el archivo de rutas ....... 21   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion.csv
-Filas excluidas .................... 4   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion_excluidas.csv
+generar_rutas 2.0  -  2026-11-23 22:32:32
+Entrada ............................ /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/rutas_destino_prueba.csv
+Filas leidas ....................... 32
+Filas en el archivo de rutas ....... 29   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/Rutas_migracion.csv
+Filas excluidas .................... 3   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/Rutas_migracion_excluidas.csv
     DUPLICADO_EXACTO             1
     RUTA_ORIGEN_INVALIDA         1
     SIN_CASO                     1
-    SIN_CODIGO_ESTUDIANTE        1
-Destinos repetidos (grupos) ........ 4
-Archivos renombrados con _# ........ 5   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/Rutas_migracion_renombrados.csv
+Incluidos en 'Otros' (sin codigo de estudiante) .. 3   (con caso: 1, sin caso: 2)
+Destinos repetidos (grupos) ........ 6
+Archivos renombrados con _# ........ 7   -> /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/Rutas_migracion_renombrados.csv
 Sufijo maximo usado ................ _2
-Nombres con caracteres corregidos .. 4
-Largo maximo destino relativo ...... 58   (aviso: 0 sobre 200)
-Filas cuyo RutaDestino original difiere del calculado: 0
+Nombres con caracteres corregidos .. 5
+Largo maximo destino relativo ...... 60   (aviso: 0 sobre 200)
+Filas cuyo RutaDestino original difiere del calculado: 3
+    fila 14: entrada=''900000006/HOM2020-1-6/USoporte/Acta: final?.pdf''  calculado='900000006/HOM2020-1-6/USoporte/Acta_ final_.pdf'
+    fila 17: entrada=''900000007/HOM2020-1-7/UCertificadoNotas/informe.''  calculado='900000007/HOM2020-1-7/UCertificadoNotas/informe'
+    fila 18: entrada=''900000007/HOM2020-1-7/UCertificadoNotas/CON.pdf''  calculado='900000007/HOM2020-1-7/UCertificadoNotas/_CON.pdf'
+Nombres de ORIGEN con caracter danado (U+FFFD, probable error de codificacion en la consulta): 1   <- el robot busca en la carpeta UN archivo que calce; si no hay uno unico, los reporta como ERROR_ORIGEN_NO_EXISTE
 VERIFICACION destinos unicos (insensible a mayusculas): OK
 Duracion: 0.0 s

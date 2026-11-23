@@ -44,7 +44,8 @@ def crear(carpeta, masivo, largo=False):
 
     def fila(ruta, nombre, codigo, caso, tipo, **kw):
         archivo(ruta, nombre, **kw)
-        filas.append([ruta, nombre, f"{codigo}/{caso}/{tipo}/{nombre}", caso, codigo, tipo, "10013", ruta.split("/")[2], "10055"])
+        rd = f"{codigo}/{caso}/{tipo}/{nombre}" if (codigo and caso) else ""      # como en la consulta real
+        filas.append([ruta, nombre, rd, caso, codigo, tipo, "10013", ruta.split("/")[2], "10055"])
 
     # 1) repetidos exactos de nombre en el mismo estudiante/caso/tipo -> Notas.pdf, Notas_1.pdf, Notas_2.pdf
     for i in (1, 2, 3):
@@ -99,6 +100,8 @@ def crear(carpeta, masivo, largo=False):
     # 11) filas que deben excluirse: sin caso, sin codigo, ruta con '..'
     fila("10013/11/1101/10055/", "SinCaso.pdf", "900000011", "", "USoporte")
     fila("10013/11/1102/10055/", "SinCodigo.pdf", "", "HOM2020-1-11", "USoporte")
+    fila("10013/11/1103/10055/", "SinNada.pdf", "", "", "USoporte")
+    fila("10013/11/1104/10055/", "SinNada.pdf", "", "", "USoporte")          # repetido dentro de Otros/SIN_CASO -> _1
     filas.append(["../../etc/", "passwd", "900000011/HOM2020-1-11/USoporte/passwd", "HOM2020-1-11", "900000011", "USoporte", "", "", ""])
 
     # 12) masivo opcional: bloques de 7 archivos consecutivos caen en el mismo estudiante/caso/tipo y

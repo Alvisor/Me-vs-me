@@ -38,9 +38,13 @@ La carpeta de destino debe existir. Si se pasa el `.xlsx` en vez del `.csv` tamb
 
 ## Formato del archivo de rutas
 
-`Origen, Destino, NombreArchivo, Caso, SCODIGO, TipoDocumento, NombreOriginal, Sufijo, FilaEntrada`
+`Origen, Destino, NombreArchivo, Caso, SCODIGO, TipoDocumento, NombreOriginal, Sufijo, FilaEntrada, Observacion`
 
 El robot solo necesita las tres primeras. `Origen` incluye el nombre del archivo y es relativo a `--origen-base`; `Destino` es la carpeta `codigo/caso/tipo/` relativa a `--destino-base`; `NombreArchivo` es el nombre final (con `_#` si estaba repetido). Admite barras `/` o `\` y separadores `,` `;` o tabulador. Si los encabezados no se reconocen, usa las columnas 1, 2 y 3 como el robot original.
+
+## Archivos sin código de estudiante: carpeta `Otros`
+
+Los archivos que no tienen código de estudiante no se descartan: van a `Otros/<caso>/<tipo>/` (columna `Observacion` = `SIN_CODIGO`) o, si tampoco tienen caso, a `Otros/SIN_CASO/<tipo>/` (`SIN_CODIGO_NI_CASO`). Dentro de `Otros` rigen las mismas reglas de repetidos (`_1`, `_2`…); en `SIN_CASO` el origen original de cada archivo se ve en `Rutas_migracion.csv` y en `_renombrados.csv`. El nombre de la carpeta se cambia con `--carpeta-sin-codigo`; con `--carpeta-sin-codigo ""` se excluyen en vez de incluirse. Lo que no tiene caso pero sí código sigue excluido (`SIN_CASO`).
 
 ## Reglas de los repetidos (`_#`)
 

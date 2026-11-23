@@ -121,6 +121,10 @@ def main(argv=None):
     ap.add_argument("--entrada", required=True, help="archivo de consulta (.csv o .xlsx)")
     ap.add_argument("--salida", default="Rutas_migracion.csv", help="archivo de rutas a generar (.csv)")
     ap.add_argument("--xlsx", action="store_true", help="ademas escribir una copia .xlsx")
+    ap.add_argument("--carpeta-sin-codigo", default="Otros",
+                    help="carpeta de primer nivel para los archivos SIN codigo de estudiante: "
+                         "Otros/<caso>/<tipo>/ (o Otros/SIN_CASO/<tipo>/ si tampoco hay caso). "
+                         "Pase '' para excluirlos en vez de incluirlos")
     ap.add_argument("--largo-aviso", type=int, default=200,
                     help="avisar cuantos destinos relativos superan este largo (por defecto 200)")
     ap.add_argument("--version", action="version", version=VERSION)
@@ -180,8 +184,14 @@ def main(argv=None):
             excluidas.append((n, "SIN_RUTA", ruta, nombre, "")); continue
         if not nombre:
             excluidas.append((n, "SIN_NOMBRE", ruta, nombre, "")); continue
+        obs = ""
         if not codigo:
-            excluidas.append((n, "SIN_CODIGO_ESTUDIANTE", ruta, nombre, "")); continue
+            if not a.carpeta_sin_codigo:
+                excluidas.append((n, "SIN_CODIGO_ESTUDIANTE", ruta, nombre, "")); continue
+            codigo = a.carpeta_sin_codigo
+            obs = "SIN_CODIGO"
+            if not caso:
+                caso, obs = "SIN_CASO", "SIN_CODIGO_NI_CASO"
         if not caso:
             excluidas.append((n, "SIN_CASO", ruta, nombre, "")); continue
         if not tipo:
@@ -207,7 +217,7 @@ def main(argv=None):
         vistos_exactos[kex] = n
         validas.append(dict(fila=n, origen=origen, dir=dest_dir, nombre=nom, original=nombre,
                             limpio=nom, caso=c2, codigo=c1, tipo=c3, cambio=(k1 or k2 or k3 or k4),
-                            rd=get(fila, "rutadestino"), sufijo=""))
+                            rd=get(fila, "rutadestino"), sufijo="", obs=obs))
 
     # ------------------------------------------------- 2. repetidos -> _1, _2
     grupos = defaultdict(list)
@@ -243,9 +253,9 @@ def main(argv=None):
 
     # --------------------------------------------------------------- 4. salida
     encab = ["Origen", "Destino", "NombreArchivo", "Caso", "SCODIGO", "TipoDocumento",
-             "NombreOriginal", "Sufijo", "FilaEntrada"]
+             "NombreOriginal", "Sufijo", "FilaEntrada", "Observacion"]
     filas_out = [[r["origen"], r["dir"] + "/", r["nombre"], r["caso"], r["codigo"], r["tipo"],
-                  r["original"], r["sufijo"], r["fila"]] for r in validas]
+                  r["original"], r["sufijo"], r["fila"], r["obs"]] for r in validas]
     with open(a.salida, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(encab)
@@ -291,6 +301,10 @@ def main(argv=None):
         f"Filas en el archivo de rutas ....... {len(validas)}   -> {a.salida}",
         f"Filas excluidas .................... {len(excluidas)}   -> {base}_excluidas.csv",
     ] + [f"    {k:<28} {v}" for k, v in sorted(por_motivo.items())] + [
+        f"Incluidos en '{a.carpeta_sin_codigo}' (sin codigo de estudiante) .. {sum(1 for r in validas if r['obs'])}"
+        f"   (con caso: {sum(1 for r in validas if r['obs'] == 'SIN_CODIGO')}, "
+        f"sin caso: {sum(1 for r in validas if r['obs'] == 'SIN_CODIGO_NI_CASO')})" if a.carpeta_sin_codigo else
+        "Sin codigo de estudiante: EXCLUIDOS (ver motivos arriba)",
         f"Destinos repetidos (grupos) ........ {grupos_dup}",
         f"Archivos renombrados con _# ........ {len(renombrados)}   -> {base}_renombrados.csv",
         f"Sufijo maximo usado ................ _{max_sufijo}" if max_sufijo else "Sufijo maximo usado ................ (ninguno)",

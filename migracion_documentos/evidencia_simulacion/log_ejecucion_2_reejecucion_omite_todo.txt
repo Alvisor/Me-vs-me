@@ -1,18 +1,47 @@
 copiar_archivos 2.0  |  EJECUCION
-Inicio ............ 2026-11-23 21:29:52
+Inicio ............ 2026-11-23 22:32:35
 Equipo/usuario .... vm / root  (Linux 6.18.44-fc-v726, Python 3.13.18)
-Archivo de rutas .. /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/rutas_viejas.csv  (1 filas; se procesaran 1)
-Origen base ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/origen
-Destino base ...... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/destino_f
+Archivo de rutas .. /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/Rutas_migracion.csv  (29 filas; se procesaran 29)
+Origen base ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/origen
+Destino base ...... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/destino
 Verificar hash .... False   |   corte por errores seguidos: 25
 ----------------------------------------------------------------------------------------------------
-[21:29:52] fila       2  COPIADO                  777/CASO-1/ESTUDIANTE/DOC02.pdf
-  progreso 1/1 (100.0%)  5,726 filas/s  errores=0  faltan ~00:00:00
+[22:32:35] fila       2  OMITIDO_YA_EXISTE        900000001/HOM2020-1-1/UCertificadoNotas/Notas.pdf   <- mismo tamano
+[22:32:35] fila       3  OMITIDO_YA_EXISTE        900000001/HOM2020-1-1/UCertificadoNotas/Notas_1.pdf   <- mismo tamano
+[22:32:35] fila       4  OMITIDO_YA_EXISTE        900000001/HOM2020-1-1/UCertificadoNotas/Notas_2.pdf   <- mismo tamano
+[22:32:35] fila       5  OMITIDO_YA_EXISTE        900000002/HOM2020-1-2/UCertificadoNotas/Certificado.pdf   <- mismo tamano
+[22:32:35] fila       6  OMITIDO_YA_EXISTE        900000002/HOM2020-1-2/UCertificadoNotas/CERTIFICADO_1.PDF   <- mismo tamano
+[22:32:35] fila       7  OMITIDO_YA_EXISTE        900000003/HOM2020-1-3/USoporte/Informe.pdf   <- mismo tamano
+[22:32:35] fila       8  OMITIDO_YA_EXISTE        900000003/HOM2020-1-3/USoporte/Informe_2.pdf   <- mismo tamano
+[22:32:35] fila       9  OMITIDO_YA_EXISTE        900000003/HOM2020-1-3/USoporte/Informe_1.pdf   <- mismo tamano
+[22:32:35] fila      10  OMITIDO_YA_EXISTE        900000004/HOM2020-1-4/USoporte/Cancelación Curso.pdf   <- mismo tamano
+[22:32:35] fila      11  ERROR_ORIGEN_NO_EXISTE   900000005/HOM2020-1-5/USoporte/Fantasma.pdf   <- no existe el archivo de origen
+[22:32:35] fila      12  ERROR_ORIGEN_NO_EXISTE   900000005/HOM2020-1-5/USoporte/Fantasma ☃ 日本.pdf   <- no existe el archivo de origen
+[22:32:35] fila      13  OMITIDO_YA_EXISTE        900000006/HOM2020-1-6/USoporte/Acta_ final_.pdf   <- mismo tamano
+[22:32:35] fila      14  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UCertificadoNotas/Salazar V..pdf   <- mismo tamano
+[22:32:35] fila      15  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UCertificadoNotas/notas .pdf   <- mismo tamano
+[22:32:35] fila      16  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UCertificadoNotas/informe   <- mismo tamano
+[22:32:35] fila      17  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UCertificadoNotas/_CON.pdf   <- mismo tamano
+[22:32:35] fila      18  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UPrograma/.pdf   <- mismo tamano
+[22:32:35] fila      19  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UPrograma/_1.pdf   <- mismo tamano
+[22:32:35] fila      20  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UPrograma/._Solicitud homologación.pdf   <- mismo tamano
+[22:32:35] fila      21  OMITIDO_YA_EXISTE        900000007/HOM2020-1-7/UPrograma/Innovaci_n 2016.pdf   <- mismo tamano; origen resuelto por patron: Innovación 2016.pdf
+[22:32:35] fila      22  OMITIDO_YA_EXISTE        900000008/HOM2020-1-8/UCertificadoNotas/Homologación.pdf   <- mismo tamano
+[22:32:35] fila      23  OMITIDO_YA_EXISTE        900000008/HOM2020-1-8/UCertificadoNotas/Homologación_1.pdf   <- mismo tamano
+[22:32:35] fila      24  OMITIDO_YA_EXISTE        900000009/HOM2020-1-9/USoporte/Grande.pdf   <- mismo tamano
+[22:32:35] fila      25  OMITIDO_YA_EXISTE        900000009/HOM2020-1-9/USoporte/Vacio.pdf   <- mismo tamano
+[22:32:35] fila      26  OMITIDO_YA_EXISTE        900000010/HOM2020-1-10/USoporte/Compartido.pdf   <- mismo tamano
+[22:32:35] fila      27  OMITIDO_YA_EXISTE        900000010/HOM2020-1-11/USoporte/Compartido.pdf   <- mismo tamano
+[22:32:35] fila      28  OMITIDO_YA_EXISTE        Otros/HOM2020-1-11/USoporte/SinCodigo.pdf   <- mismo tamano
+[22:32:35] fila      29  OMITIDO_YA_EXISTE        Otros/SIN_CASO/USoporte/SinNada.pdf   <- mismo tamano
+[22:32:35] fila      30  OMITIDO_YA_EXISTE        Otros/SIN_CASO/USoporte/SinNada_1.pdf   <- mismo tamano
+  progreso 29/29 (100.0%)  42,653 filas/s  errores=2  faltan ~00:00:00
 ----------------------------------------------------------------------------------------------------
 RESUMEN  (COMPLETO)
-   COPIADO                            1
-   filas procesadas                   1 de 1
+   ERROR_ORIGEN_NO_EXISTE             2
+   OMITIDO_YA_EXISTE                 27
+   filas procesadas                  29 de 29
    Bytes copiados ........... 0.0 MB
-   Duracion ................. 00:00:00  (1,816 filas/s)
-   Log ...................... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/logs/log_ejecucion_20261123_212952.txt
-   Resultado por fila ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim/logs/resultado_ejecucion_20261123_212952.csv
+   Duracion ................. 00:00:00  (19,463 filas/s)
+   Log ...................... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/logs/log_ejecucion_20261123_223235.txt
+   Resultado por fila ....... /tmp/claude-0/-home-user-Me-vs-me/dbb02606-fc29-57e0-bd63-685d2672b1f1/scratchpad/sim9/logs/resultado_ejecucion_20261123_223235.csv
