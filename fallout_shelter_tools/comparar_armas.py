@@ -44,7 +44,14 @@ def armas_de_la_partida(save):
     return c
 
 
+URL_REF = "https://raw.githubusercontent.com/robot9706/FSSE/gh-pages/CSV/csv_excel_weapons.csv"
+
+
 def cargar_referencia():
+    if not REF.exists():                      # descarga la lista si no esta junto al script
+        import urllib.request
+        print("Descargando lista de armas...", file=sys.stderr)
+        REF.write_bytes(urllib.request.urlopen(URL_REF, timeout=30).read())
     with open(REF, newline="", encoding="utf-8") as f:
         filas = list(csv.DictReader(f, delimiter=";"))
     return {r["ID"]: r for r in filas if r["Type"] == "Gun" or r["Type"]}
@@ -58,7 +65,7 @@ def main():
     a = ap.parse_args()
 
     ref = cargar_referencia()
-    tengo = armas_de_la_partida(load := cargar_partida(a.save))
+    tengo = armas_de_la_partida(cargar_partida(a.save))
     ids_ref = set(ref)
     faltan = sorted(ids_ref - set(tengo))
     desconocidas = sorted(set(tengo) - ids_ref)
